@@ -1,21 +1,24 @@
 {
-  "name": "@enormora/objectory",
-  "version": "0.0.1",
-  "main": "index.js",
-  "type": "module",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/enormora/objectory.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/enormora/objectory/issues"
-  },
-  "homepage": "https://github.com/enormora/objectory#readme",
-  "description": ""
+    "name": "@enormora/objectory",
+    "version": "0.0.1",
+    "main": "index.js",
+    "type": "module",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/enormora/objectory.git"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/enormora/objectory/issues"
+    },
+    "homepage": "https://github.com/enormora/objectory#readme",
+    "description": "",
+    "devDependencies": {
+        "prettier": "3.6.2"
+    }
 }
