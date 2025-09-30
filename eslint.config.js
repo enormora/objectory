@@ -26,7 +26,7 @@ export default [
                     checkJSXText: true,
                     checkComments: true,
                     cspell: {
-                        words: ['objectory'],
+                        words: ['objectory', 'enormora'],
                         ignoreWords: [],
                         flagWords: [],
                         ignoreRegExpList: [],
@@ -71,6 +71,11 @@ export default [
     },
     {
         ...nodeConfigFileConfig,
-        files: ['eslint.config.js', 'prettier.config.js']
+        files: ['eslint.config.js', 'prettier.config.js', 'packtory.config.js'],
+        rules: {
+            ...nodeConfigFileConfig.rules,
+
+            'node/no-process-env': 'off'
+        }
     }
 ];
