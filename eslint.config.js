@@ -47,6 +47,29 @@ export default [
         files: ['**/*.ts']
     },
     {
+        files: ['**/*.ts'],
+        rules: {
+            'functional/prefer-immutable-types': 'off'
+        }
+    },
+    {
+        files: ['**/*.test.ts'],
+        rules: {
+            '@typescript-eslint/no-floating-promises': [
+                'error',
+                {
+                    allowForKnownSafeCalls: [
+                        {
+                            from: 'package',
+                            name: 'test',
+                            package: 'node:test'
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    {
         ...nodeConfigFileConfig,
         files: ['eslint.config.js', 'prettier.config.js']
     }
