@@ -16,3 +16,5 @@ lint-fix:
 
 test-unit:
 	node --test source/**/*.test.ts
+
+test: compile lint test-unit
