@@ -1,0 +1,24 @@
+---
+name: Continuous Integration
+
+on:
+    push:
+        branches: ['main']
+    pull_request:
+        branches: ['main']
+
+jobs:
+    static-code-analysis:
+        name: Static code analysis
+        runs-on: ubuntu-24.04
+        steps:
+            - name: Checkout Git repository
+              uses: actions/checkout@v4
+            - name: Setup Node.js
+              uses: actions/setup-node@v5
+              with:
+                  node-version-file: '.node-version'
+            - name: Install dependencies
+              run: npm clean-install
+            - name: Run all tests
+              run: npx just test
