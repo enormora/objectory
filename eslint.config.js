@@ -49,7 +49,8 @@ export default [
     {
         files: ['**/*.ts'],
         rules: {
-            'functional/prefer-immutable-types': 'off'
+            'functional/prefer-immutable-types': 'off',
+            'functional/type-declaration-immutability': 'off'
         }
     },
     {
