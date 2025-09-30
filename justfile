@@ -13,3 +13,6 @@ lint:
 lint-fix:
 	prettier --log-level warn --write .
 	eslint --fix .
+
+test-unit:
+	node --test source/**/*.test.ts
