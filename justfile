@@ -15,6 +15,6 @@ lint-fix:
 	eslint --fix .
 
 test-unit:
-	node --test source/**/*.test.ts
+	node --test --test-isolation="none" source/**/*.test.ts
 
 test: compile lint test-unit
