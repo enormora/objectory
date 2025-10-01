@@ -332,8 +332,12 @@ function applyOverrides<GeneratedObject extends Record<string, AllowedGeneratorR
 ): GeneratedObjectToShape<GeneratedObject> {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-unsafe-type-assertion -- ok in this case
     const result = {} as Mutable<GeneratedObjectToShape<GeneratedObject>>;
+    const keys = new Set<keyof GeneratedObject>([
+        ...(Object.keys(generatedObject) as (keyof GeneratedObject)[]),
+        ...(Object.keys(overrides) as (keyof GeneratedObject)[])
+    ]);
 
-    for (const key of Object.keys(generatedObject) as (keyof GeneratedObject)[]) {
+    for (const key of keys) {
         const value = generatedObject[key];
         const hasOverride = Object.hasOwn(overrides, key);
         const overrideValue = hasOverride ? createOverrideWrapper(overrides[key]) : noOverrideSymbol;
