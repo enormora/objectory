@@ -18,3 +18,6 @@ test-unit:
 	node --test --test-isolation="none" source/**/*.test.ts
 
 test: compile lint test-unit
+
+publish-package args="": compile
+	packtory publish {{ args }}
