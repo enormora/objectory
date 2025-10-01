@@ -432,3 +432,27 @@ test('build() works with Date', () => {
         foo: new Date(1)
     });
 });
+
+test('build() works with overriding optional fields with undefined', () => {
+    const factory = createFactory<{ foo?: string | undefined }>(() => {
+        return {
+            foo: 'bar'
+        };
+    });
+
+    const actual = factory.build({ foo: undefined });
+
+    assert.deepStrictEqual(actual, { foo: undefined });
+});
+
+test('build() works with overriding nullable fields with null', () => {
+    const factory = createFactory<{ foo: string | null }>(() => {
+        return {
+            foo: 'bar'
+        };
+    });
+
+    const actual = factory.build({ foo: null });
+
+    assert.deepStrictEqual(actual, { foo: null });
+});
