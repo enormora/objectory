@@ -26,9 +26,7 @@ type OverridesHelper<T> =
             : T;
 
 type ObjectoryFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>> = {
-    readonly build: (
-        overrides?: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>
-    ) => GeneratedObjectToShape<ShapeToGeneratorReturnValue<ObjectShape>>;
+    readonly build: (overrides?: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>) => ObjectShape;
     readonly asArray: (options?: ArrayFactoryOptions) => ArrayFactoryValue<ObjectShape>;
 };
 
@@ -286,7 +284,8 @@ export function createFactory<ObjectShape extends Record<string, AllowedObjectSh
         build(overrides = {}) {
             const generatedObject = generatorFunction();
 
-            return applyOverrides(generatedObject, overrides);
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- ok in this case
+            return applyOverrides(generatedObject, overrides) as ObjectShape;
         },
         asArray(options) {
             return createArrayFactory(factory, options);
