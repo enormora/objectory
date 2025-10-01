@@ -34,6 +34,9 @@ type OverridesHelper<T> =
 type ObjectoryFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>> = {
     readonly build: (overrides?: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>) => ObjectShape;
     readonly asArray: (options?: ArrayFactoryOptions) => ArrayFactoryValue<ObjectShape>;
+    readonly withOverrides: (
+        overrides: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>
+    ) => ObjectoryFactory<ObjectShape>;
 };
 
 type ShapeToGeneratorReturnValueHelper<T> = T extends readonly (infer U)[]
@@ -423,6 +426,23 @@ function applyOverrides<GeneratedObject extends Record<string, AllowedGeneratorR
     return Object.fromEntries(entries) as GeneratedObjectToShape<GeneratedObject>;
 }
 
+function mergeOverrides<GeneratedObject extends Record<string, AllowedGeneratorReturnShape>>(
+    base: Overrides<GeneratedObject>,
+    extension: Overrides<GeneratedObject>
+): Overrides<GeneratedObject> {
+    const merged: Overrides<GeneratedObject> = { ...base };
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- ok in this case
+    for (const [key, value] of Object.entries(extension) as [
+        keyof Overrides<GeneratedObject>,
+        OverridesHelper<GeneratedObject[keyof GeneratedObject]>
+    ][]) {
+        merged[key] = value;
+    }
+
+    return merged;
+}
+
 function createArrayFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>>(
     factory: ObjectoryFactory<ObjectShape>,
     options?: ArrayFactoryOptions
@@ -434,20 +454,33 @@ function createArrayFactory<ObjectShape extends Record<string, AllowedObjectShap
     };
 }
 
-export function createFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>>(
-    generatorFunction: GeneratorFunction<ObjectShape>
+function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>>(
+    generatorFunction: GeneratorFunction<ObjectShape>,
+    defaultOverrides: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>
 ): ObjectoryFactory<ObjectShape> {
     const factory: ObjectoryFactory<ObjectShape> = {
         build(overrides = {}) {
             const generatedObject = generatorFunction();
+            const mergedOverrides = mergeOverrides(defaultOverrides, overrides);
 
             // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- ok in this case
-            return applyOverrides(generatedObject, overrides) as ObjectShape;
+            return applyOverrides(generatedObject, mergedOverrides) as ObjectShape;
         },
         asArray(options) {
             return createArrayFactory(factory, options);
+        },
+        withOverrides(overrides) {
+            const mergedOverrides = mergeOverrides(defaultOverrides, overrides);
+
+            return instantiateFactory(generatorFunction, mergedOverrides);
         }
     };
 
     return factory;
+}
+
+export function createFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>>(
+    generatorFunction: GeneratorFunction<ObjectShape>
+): ObjectoryFactory<ObjectShape> {
+    return instantiateFactory(generatorFunction, {} as Overrides<ShapeToGeneratorReturnValue<ObjectShape>>);
 }
