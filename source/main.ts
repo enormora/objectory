@@ -37,6 +37,7 @@ type ObjectoryFactory<ObjectShape extends Record<string, AllowedObjectShapeValue
     readonly withOverrides: (
         overrides: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>
     ) => ObjectoryFactory<ObjectShape>;
+    readonly buildList: (options?: { readonly length?: number }) => ObjectShape[];
 };
 
 type ShapeToGeneratorReturnValueHelper<T> = T extends readonly (infer U)[]
@@ -473,6 +474,11 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
             const mergedOverrides = mergeOverrides(defaultOverrides, overrides);
 
             return instantiateFactory(generatorFunction, mergedOverrides);
+        },
+        buildList({ length = 0 }: { readonly length?: number } = {}) {
+            return Array.from({ length }, () => {
+                return factory.build();
+            });
         }
     };
 
