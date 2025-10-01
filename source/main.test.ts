@@ -456,3 +456,43 @@ test('build() works with overriding nullable fields with null', () => {
 
     assert.deepStrictEqual(actual, { foo: null });
 });
+
+test('build() works with overriding optional and nullable fields with undefined', () => {
+    const factory = createFactory<{ baz: { foo: { bar: string } | null | undefined } }>(() => {
+        return {
+            baz: createFactory<{ foo: { bar: string } | null | undefined }>(() => {
+                return { foo: undefined };
+            })
+        };
+    });
+
+    const actual = factory.build({ baz: { foo: null } });
+
+    assert.deepStrictEqual(actual, { baz: { foo: null } });
+});
+
+test('build() works with overriding arrays of primitives', () => {
+    const factory = createFactory<{ foo: string[] }>(() => {
+        return {
+            foo: ['qux']
+        };
+    });
+
+    const actual = factory.build({ foo: ['bar'] });
+
+    assert.deepStrictEqual(actual, { foo: ['bar'] });
+});
+
+test('build() works with overriding nested optional arrays of primitives', () => {
+    const factory = createFactory<{ bar: { foo?: string[] } }>(() => {
+        return {
+            bar: createFactory<{ foo?: string[] }>(() => {
+                return {};
+            })
+        };
+    });
+
+    const actual = factory.build({ bar: { foo: ['bar'] } });
+
+    assert.deepStrictEqual(actual, { bar: { foo: ['bar'] } });
+});
