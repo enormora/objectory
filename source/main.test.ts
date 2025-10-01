@@ -496,3 +496,23 @@ test('build() works with overriding nested optional arrays of primitives', () =>
 
     assert.deepStrictEqual(actual, { bar: { foo: ['bar'] } });
 });
+
+test('build() works with overriding nullish Partial<> object', () => {
+    type InnerType = { foo: string; bar: string | null; baz: number } | null | undefined;
+    type PartialInnerType = Partial<InnerType>;
+    const factory = createFactory<{ bar: PartialInnerType }>(() => {
+        return {
+            bar: createFactory(() => {
+                return { foo: 'bar', bar: 'baz' };
+            })
+        };
+    });
+
+    const actual = factory.build({
+        bar: {
+            bar: undefined
+        }
+    });
+
+    assert.deepStrictEqual(actual, { bar: { foo: 'bar', bar: undefined } });
+});
