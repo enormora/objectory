@@ -1,4 +1,7 @@
 /* eslint-disable @stylistic/indent-binary-ops, @stylistic/operator-linebreak, @stylistic/indent -- conflicts with prettier */
+import { normalizePath, removePropertyAtPath } from './path-operations.ts';
+import { isRecord } from './record.ts';
+
 const arrayFactorySymbol: unique symbol = Symbol('objectory.arrayFactory');
 const noOverrideSymbol: unique symbol = Symbol('objectory.noOverride');
 const overrideWrapperSymbol: unique symbol = Symbol('objectory.overrideWrapper');
@@ -38,6 +41,7 @@ type ObjectoryFactory<ObjectShape extends Record<string, AllowedObjectShapeValue
         overrides: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>
     ) => ObjectoryFactory<ObjectShape>;
     readonly buildList: (options?: { readonly length?: number }) => ObjectShape[];
+    readonly buildInvalidWithout: (path: string) => unknown;
 };
 
 type ShapeToGeneratorReturnValueHelper<T> = T extends readonly (infer U)[]
@@ -94,10 +98,6 @@ type AllowedGeneratorReturnShape =
     | BaseTypes
     | ObjectoryFactory<Record<string, AllowedObjectShapeValues>>
     | readonly AllowedGeneratorReturnShape[];
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function isFactory<T extends Record<string, AllowedObjectShapeValues>>(value: unknown): value is ObjectoryFactory<T> {
     return isRecord(value) && typeof value.build === 'function';
@@ -240,6 +240,10 @@ function isNoOverride(override: unknown): override is typeof noOverrideSymbol {
 }
 
 function normalizeOverride(override: unknown): NormalizedOverride {
+    if (override === undefined) {
+        return { applied: false };
+    }
+
     if (isNoOverride(override)) {
         return { applied: false };
     }
@@ -479,6 +483,16 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
             return Array.from({ length }, () => {
                 return factory.build();
             });
+        },
+        buildInvalidWithout(path) {
+            const pathSegments = normalizePath(path);
+            const baseObject = factory.build();
+
+            if (pathSegments.length > 0) {
+                return removePropertyAtPath(baseObject, pathSegments);
+            }
+
+            return baseObject;
         }
     };
 
