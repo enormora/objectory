@@ -1,8 +1,10 @@
 import { isRecord } from './record.ts';
 
-type PathSegment = number | string;
+export type PathSegment = number | string;
 
-export function normalizePath(path: string): readonly PathSegment[] {
+type Path = readonly PathSegment[];
+
+export function normalizePath(path: string): Path {
     return path.split('.').map((segment) => {
         const segmentAsNumber = Number.parseInt(segment, 10);
         if (!Number.isNaN(segmentAsNumber)) {
@@ -12,7 +14,7 @@ export function normalizePath(path: string): readonly PathSegment[] {
     });
 }
 
-function removeFromArray(target: readonly unknown[], pathSegments: readonly PathSegment[]): unknown[] {
+function removeFromArray(target: readonly unknown[], pathSegments: Path): unknown[] {
     const [head, ...tail] = pathSegments;
     const index = typeof head === 'number' ? head : Number(head);
 
@@ -27,7 +29,7 @@ function removeFromArray(target: readonly unknown[], pathSegments: readonly Path
         return copy;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-use-before-define -- ok for recursive function call
+    // eslint-disable-next-line @typescript-eslint/no-use-before-define -- ok for recursive call
     copy[index] = removePropertyAtPath(copy[index], tail);
     return copy;
 }
@@ -87,7 +89,7 @@ function removeFromObject(
     return updateNestedKey(target, key, tail);
 }
 
-export function removePropertyAtPath(target: unknown, pathSegments: readonly PathSegment[]): unknown {
+export function removePropertyAtPath(target: unknown, pathSegments: Path): unknown {
     if (pathSegments.length === 0) {
         return target;
     }
@@ -101,4 +103,92 @@ export function removePropertyAtPath(target: unknown, pathSegments: readonly Pat
     }
 
     return target;
+}
+
+function setValueInArray(target: readonly unknown[], pathSegments: Path, value: unknown): unknown[] {
+    const [head, ...tail] = pathSegments;
+    const index = typeof head === 'number' ? head : Number(head);
+
+    if (!Number.isInteger(index) || index < 0 || index >= target.length) {
+        return target.slice();
+    }
+
+    const copy = target.slice();
+
+    if (tail.length === 0) {
+        copy[index] = value;
+        return copy;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-use-before-define -- ok for recursive call
+    copy[index] = setValueAtPath(copy[index], tail, value);
+    return copy;
+}
+
+// eslint-disable-next-line max-statements -- needs to be refactored
+function setValueInObject(
+    target: Record<string, unknown>,
+    pathSegments: Path,
+    value: unknown
+): Record<string, unknown> {
+    const [head, ...tail] = pathSegments;
+
+    if (head === undefined) {
+        return shallowCloneObject(target);
+    }
+
+    const key = toKey(head);
+
+    if (!Object.hasOwn(target, key)) {
+        return shallowCloneObject(target);
+    }
+
+    const current = target[key];
+    // eslint-disable-next-line @typescript-eslint/no-use-before-define -- ok for recursive call
+    const updated = tail.length === 0 ? value : setValueAtPath(current, tail, value);
+
+    if (updated === current) {
+        return shallowCloneObject(target);
+    }
+
+    return {
+        ...target,
+        [key]: updated
+    };
+}
+
+function createStructureForPath(pathSegments: Path, value: unknown): unknown {
+    const [head, ...tail] = pathSegments;
+
+    if (head === undefined) {
+        return value;
+    }
+
+    if (typeof head === 'number') {
+        const length = head + 1;
+        const result = Array.from<unknown>({ length });
+        result.fill(undefined, 0, length - 1);
+        result[head] = createStructureForPath(tail, value);
+        return result;
+    }
+
+    return {
+        [head]: createStructureForPath(tail, value)
+    };
+}
+
+export function setValueAtPath(target: unknown, pathSegments: Path, value: unknown): unknown {
+    if (pathSegments.length === 0) {
+        return value;
+    }
+
+    if (Array.isArray(target)) {
+        return setValueInArray(target, pathSegments, value);
+    }
+
+    if (isRecord(target)) {
+        return setValueInObject(target, pathSegments, value);
+    }
+
+    return createStructureForPath(pathSegments, value);
 }
