@@ -18,6 +18,11 @@ type ArrayFactoryValue<ObjectShape extends Record<string, AllowedObjectShapeValu
     readonly [arrayFactorySymbol]: true;
 };
 
+type ExtensionShape<
+    BaseShape extends Record<string, AllowedObjectShapeValues>,
+    ExtendedShape extends BaseShape
+> = Partial<Pick<ExtendedShape, keyof BaseShape>> & Pick<ExtendedShape, Exclude<keyof ExtendedShape, keyof BaseShape>>;
+
 type Overrides<ObjectShape extends Record<string, AllowedGeneratorReturnShape>> = {
     [P in keyof ObjectShape]?: OverridesHelper<ObjectShape[P]>;
 };
@@ -40,6 +45,9 @@ type ObjectoryFactory<ObjectShape extends Record<string, AllowedObjectShapeValue
     readonly withOverrides: (
         overrides: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>
     ) => ObjectoryFactory<ObjectShape>;
+    readonly extend: <ExtendedObjectShape extends ObjectShape>(
+        extensionGenerator: () => ShapeToGeneratorReturnValue<ExtensionShape<ObjectShape, ExtendedObjectShape>>
+    ) => ObjectoryFactory<ExtendedObjectShape>;
     readonly buildList: (options?: { readonly length?: number }) => ObjectShape[];
     readonly buildInvalidWithout: (path: string) => unknown;
     readonly buildInvalidWithChanged: (path: string, value: unknown) => unknown;
@@ -479,6 +487,26 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
             const mergedOverrides = mergeOverrides(defaultOverrides, overrides);
 
             return instantiateFactory(generatorFunction, mergedOverrides);
+        },
+        extend<ExtendedObjectShape extends ObjectShape>(
+            extensionGenerator: () => ShapeToGeneratorReturnValue<ExtensionShape<ObjectShape, ExtendedObjectShape>>
+        ) {
+            const extendedGeneratorFunction = (): ShapeToGeneratorReturnValue<ExtendedObjectShape> => {
+                const baseGenerated = generatorFunction();
+                const extensionGenerated = extensionGenerator();
+
+                // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-unsafe-type-assertion -- ok in this case
+                return {
+                    ...baseGenerated,
+                    ...extensionGenerated
+                } as ShapeToGeneratorReturnValue<ExtendedObjectShape>;
+            };
+
+            const extendedDefaultOverrides =
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- default overrides remain compatible when extending
+                defaultOverrides as Overrides<ShapeToGeneratorReturnValue<ExtendedObjectShape>>;
+
+            return instantiateFactory(extendedGeneratorFunction, extendedDefaultOverrides);
         },
         buildList({ length = 0 }: { readonly length?: number } = {}) {
             return Array.from({ length }, () => {
