@@ -41,3 +41,17 @@ test('buildInvalidWithout() removes a nested property using dotted path', () => 
         }
     });
 });
+
+test('buildInvalidWithout() removes array elements when index is provided', () => {
+    const factory = createFactory<{ items: number[] }>(() => {
+        return {
+            items: [-1, 0, 1]
+        };
+    });
+
+    const actual = factory.buildInvalidWithout('items.1');
+
+    assert.deepStrictEqual(actual, {
+        items: [-1, 1]
+    });
+});

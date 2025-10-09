@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { normalizePath, removePropertyAtPath } from './path-operations.ts';
+import { normalizePath, removePropertyAtPath, setValueAtPath } from './path-operations.ts';
 
 test('normalizePath() splits dotted strings into segments', () => {
     assert.deepStrictEqual(normalizePath('foo.bar.baz'), ['foo', 'bar', 'baz']);
@@ -58,4 +58,43 @@ test('removePropertyAtPath() leaves value untouched when path missing', () => {
     const result = removePropertyAtPath(original, ['foo', 'baz']);
 
     assert.deepStrictEqual(result, { foo: { bar: 1 } });
+});
+
+test('setValueAtPath() updates nested object properties immutably', () => {
+    const original = {
+        outer: {
+            inner: {
+                value: 1
+            }
+        }
+    } as const;
+
+    const result = setValueAtPath(original, ['outer', 'inner', 'value'], 'not-a-number');
+
+    assert.deepStrictEqual(result, {
+        outer: {
+            inner: {
+                value: 'not-a-number'
+            }
+        }
+    });
+    assert.deepStrictEqual(original, {
+        outer: {
+            inner: {
+                value: 1
+            }
+        }
+    });
+});
+
+test('setValueAtPath() updates array indices', () => {
+    const original = {
+        values: [-1, 0, 1]
+    } as const;
+
+    const result = setValueAtPath(original, ['values', 1], 'not-a-number');
+
+    assert.deepStrictEqual(result, {
+        values: [-1, 'not-a-number', 1]
+    });
 });
