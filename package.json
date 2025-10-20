@@ -24,7 +24,7 @@
         "@enormora/eslint-config-node": "0.0.21",
         "@enormora/eslint-config-typescript": "0.0.29",
         "@packtory/cli": "0.0.7",
-        "@types/node": "24.7.2",
+        "@types/node": "24.8.1",
         "eslint": "9.37.0",
         "prettier": "3.6.2",
         "rust-just": "1.43.0",
