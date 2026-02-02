@@ -8,26 +8,26 @@ const overrideWrapperSymbol: unique symbol = Symbol('objectory.overrideWrapper')
 const removePropertySymbol: unique symbol = Symbol('objectory.removeProperty');
 const primitiveAllowedTypes = new Set(['string', 'number', 'boolean', 'bigint', 'symbol', 'function']);
 
-type ArrayFactoryOptions = {
+export type ArrayFactoryOptions = {
     readonly length?: number;
 };
 
-type ArrayFactoryValue<ObjectShape extends Record<string, AllowedObjectShapeValues>> = {
+export type ArrayFactoryValue<ObjectShape extends Record<string, AllowedObjectShapeValues>> = {
     readonly factory: ObjectoryFactory<ObjectShape>;
     readonly length: number;
     readonly [arrayFactorySymbol]: true;
 };
 
-type ExtensionShape<
+export type ExtensionShape<
     BaseShape extends Record<string, AllowedObjectShapeValues>,
     ExtendedShape extends BaseShape
 > = Partial<Pick<ExtendedShape, keyof BaseShape>> & Pick<ExtendedShape, Exclude<keyof ExtendedShape, keyof BaseShape>>;
 
-type Overrides<ObjectShape extends Record<string, AllowedGeneratorReturnShape>> = {
+export type Overrides<ObjectShape extends Record<string, AllowedGeneratorReturnShape>> = {
     [P in keyof ObjectShape]?: OverridesHelper<ObjectShape[P]>;
 };
 
-type OverridesHelper<T> =
+export type OverridesHelper<T> =
     | RemoveProperty
     | (T extends ObjectoryFactory<infer U>
           ? Overrides<ShapeToGeneratorReturnValue<U>>
@@ -39,7 +39,7 @@ type OverridesHelper<T> =
     | null
     | undefined;
 
-type ObjectoryFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>> = {
+export type ObjectoryFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>> = {
     readonly build: (overrides?: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>) => ObjectShape;
     readonly asArray: (options?: ArrayFactoryOptions) => ArrayFactoryValue<ObjectShape>;
     readonly withOverrides: (
@@ -53,7 +53,7 @@ type ObjectoryFactory<ObjectShape extends Record<string, AllowedObjectShapeValue
     readonly buildInvalidWithChanged: (path: string, value: unknown) => unknown;
 };
 
-type ShapeToGeneratorReturnValueHelper<T> = T extends readonly (infer U)[]
+export type ShapeToGeneratorReturnValueHelper<T> = T extends readonly (infer U)[]
     ? U extends Record<string, AllowedObjectShapeValues>
         ? ArrayFactoryReturnValue<U>
         : readonly ShapeToGeneratorReturnValueHelper<U>[]
@@ -61,7 +61,7 @@ type ShapeToGeneratorReturnValueHelper<T> = T extends readonly (infer U)[]
       ? ObjectoryFactory<T>
       : T;
 
-type ShapeToGeneratorReturnValue<T extends Record<string, AllowedObjectShapeValues>> = {
+export type ShapeToGeneratorReturnValue<T extends Record<string, AllowedObjectShapeValues>> = {
     [P in keyof T]: ShapeToGeneratorReturnValueHelper<T[P]>;
 };
 
@@ -78,7 +78,8 @@ type GeneratedObjectToShapeHelper<T> =
             ? readonly GeneratedObjectToShapeHelper<U>[]
             : T;
 
-type ArrayFactoryReturnValue<T> = T extends Record<string, AllowedObjectShapeValues> ? ArrayFactoryValue<T> : never;
+export type ArrayFactoryReturnValue<T> =
+    T extends Record<string, AllowedObjectShapeValues> ? ArrayFactoryValue<T> : never;
 
 type GeneratedArrayItemShape<ObjectShape extends Record<string, AllowedObjectShapeValues>> = GeneratedObjectToShape<
     ShapeToGeneratorReturnValue<ObjectShape>
@@ -88,21 +89,21 @@ type OverrideWrapper = { readonly value: unknown; readonly [overrideWrapperSymbo
 
 type NormalizedOverride = { readonly applied: false } | { readonly applied: true; readonly value: unknown };
 
-type RemoveProperty = { readonly [removePropertySymbol]: true };
+export type RemoveProperty = { readonly [removePropertySymbol]: true };
 
-type GeneratorFunction<ObjectShape extends Record<string, AllowedObjectShapeValues>> =
+export type GeneratorFunction<ObjectShape extends Record<string, AllowedObjectShapeValues>> =
     () => ShapeToGeneratorReturnValue<ObjectShape>;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ok in this case
-type AnyFunction = (...args: any[]) => unknown;
+export type AnyFunction = (...args: any[]) => unknown;
 
-type BaseTypes = AnyFunction | Date | bigint | boolean | number | string | symbol | null | undefined;
+export type BaseTypes = AnyFunction | Date | bigint | boolean | number | string | symbol | null | undefined;
 
-type AllowedObjectShapeValues =
+export type AllowedObjectShapeValues =
     | BaseTypes
     | readonly AllowedObjectShapeValues[]
     | { [key: string]: AllowedObjectShapeValues };
-type AllowedGeneratorReturnShape =
+export type AllowedGeneratorReturnShape =
     | ArrayFactoryValue<Record<string, AllowedObjectShapeValues>>
     | BaseTypes
     | ObjectoryFactory<Record<string, AllowedObjectShapeValues>>
