@@ -4,34 +4,15 @@ export type PathSegment = number | string;
 
 type Path = readonly PathSegment[];
 
+const integerSegmentPattern = /^\d+$/u;
+
 export function normalizePath(path: string): Path {
     return path.split('.').map((segment) => {
-        const segmentAsNumber = Number.parseInt(segment, 10);
-        if (!Number.isNaN(segmentAsNumber)) {
-            return segmentAsNumber;
+        if (integerSegmentPattern.test(segment)) {
+            return Number(segment);
         }
         return segment;
     });
-}
-
-function removeFromArray(target: readonly unknown[], pathSegments: Path): unknown[] {
-    const [head, ...tail] = pathSegments;
-    const index = typeof head === 'number' ? head : Number(head);
-
-    if (!Number.isInteger(index) || index < 0 || index >= target.length) {
-        return target.slice();
-    }
-
-    const copy = target.slice();
-
-    if (tail.length === 0) {
-        copy.splice(index, 1);
-        return copy;
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-use-before-define -- ok for recursive call
-    copy[index] = removePropertyAtPath(copy[index], tail);
-    return copy;
 }
 
 function toKey(segment: PathSegment): string {
@@ -47,65 +28,16 @@ function removeDirectKey(target: Record<string, unknown>, key: string): Record<s
     return rest;
 }
 
-function updateNestedKey(
-    target: Record<string, unknown>,
-    key: string,
-    tail: readonly PathSegment[]
-): Record<string, unknown> {
-    const current = target[key];
-    // eslint-disable-next-line @typescript-eslint/no-use-before-define -- ok for recursive call
-    const updated = removePropertyAtPath(current, tail);
+type ArrayTerminal = (copy: unknown[], index: number) => unknown[];
+type ObjectTerminal = (target: Record<string, unknown>, key: string) => Record<string, unknown>;
+type RecursiveStep = (child: unknown, tail: Path) => unknown;
 
-    if (updated === current) {
-        return shallowCloneObject(target);
-    }
-
-    return {
-        ...target,
-        [key]: updated
-    };
-}
-
-function removeFromObject(
-    target: Record<string, unknown>,
-    pathSegments: readonly PathSegment[]
-): Record<string, unknown> {
-    const [head, ...tail] = pathSegments;
-
-    if (head === undefined) {
-        return shallowCloneObject(target);
-    }
-
-    const key = toKey(head);
-
-    if (!Object.hasOwn(target, key)) {
-        return shallowCloneObject(target);
-    }
-
-    if (tail.length === 0) {
-        return removeDirectKey(target, key);
-    }
-
-    return updateNestedKey(target, key, tail);
-}
-
-export function removePropertyAtPath(target: unknown, pathSegments: Path): unknown {
-    if (pathSegments.length === 0) {
-        return target;
-    }
-
-    if (Array.isArray(target)) {
-        return removeFromArray(target, pathSegments);
-    }
-
-    if (isRecord(target)) {
-        return removeFromObject(target, pathSegments);
-    }
-
-    return target;
-}
-
-function setValueInArray(target: readonly unknown[], pathSegments: Path, value: unknown): unknown[] {
+function updateArrayAtIndex(
+    target: readonly unknown[],
+    pathSegments: Path,
+    onTerminal: ArrayTerminal,
+    onRecurse: RecursiveStep
+): unknown[] {
     const [head, ...tail] = pathSegments;
     const index = typeof head === 'number' ? head : Number(head);
 
@@ -116,20 +48,37 @@ function setValueInArray(target: readonly unknown[], pathSegments: Path, value: 
     const copy = target.slice();
 
     if (tail.length === 0) {
-        copy[index] = value;
-        return copy;
+        return onTerminal(copy, index);
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-use-before-define -- ok for recursive call
-    copy[index] = setValueAtPath(copy[index], tail, value);
+    copy[index] = onRecurse(copy[index], tail);
     return copy;
 }
 
-// eslint-disable-next-line max-statements -- needs to be refactored
-function setValueInObject(
+function applyRecursiveObjectUpdate(
+    target: Record<string, unknown>,
+    key: string,
+    tail: Path,
+    onRecurse: RecursiveStep
+): Record<string, unknown> {
+    const current = target[key];
+    const updated = onRecurse(current, tail);
+
+    if (updated === current) {
+        return shallowCloneObject(target);
+    }
+
+    return {
+        ...target,
+        [key]: updated
+    };
+}
+
+function updateObjectAtKey(
     target: Record<string, unknown>,
     pathSegments: Path,
-    value: unknown
+    onTerminal: ObjectTerminal,
+    onRecurse: RecursiveStep
 ): Record<string, unknown> {
     const [head, ...tail] = pathSegments;
 
@@ -143,18 +92,35 @@ function setValueInObject(
         return shallowCloneObject(target);
     }
 
-    const current = target[key];
-    // eslint-disable-next-line @typescript-eslint/no-use-before-define -- ok for recursive call
-    const updated = tail.length === 0 ? value : setValueAtPath(current, tail, value);
-
-    if (updated === current) {
-        return shallowCloneObject(target);
+    if (tail.length === 0) {
+        return onTerminal(target, key);
     }
 
-    return {
-        ...target,
-        [key]: updated
-    };
+    return applyRecursiveObjectUpdate(target, key, tail, onRecurse);
+}
+
+export function removePropertyAtPath(target: unknown, pathSegments: Path): unknown {
+    if (pathSegments.length === 0) {
+        return target;
+    }
+
+    if (Array.isArray(target)) {
+        return updateArrayAtIndex(
+            target,
+            pathSegments,
+            (copy, index) => {
+                copy.splice(index, 1);
+                return copy;
+            },
+            removePropertyAtPath
+        );
+    }
+
+    if (isRecord(target)) {
+        return updateObjectAtKey(target, pathSegments, removeDirectKey, removePropertyAtPath);
+    }
+
+    return target;
 }
 
 function createStructureForPath(pathSegments: Path, value: unknown): unknown {
@@ -165,9 +131,7 @@ function createStructureForPath(pathSegments: Path, value: unknown): unknown {
     }
 
     if (typeof head === 'number') {
-        const length = head + 1;
-        const result = Array.from<unknown>({ length });
-        result.fill(undefined, 0, length - 1);
+        const result = Array.from<unknown>({ length: head + 1 });
         result[head] = createStructureForPath(tail, value);
         return result;
     }
@@ -182,12 +146,31 @@ export function setValueAtPath(target: unknown, pathSegments: Path, value: unkno
         return value;
     }
 
+    const recurse: RecursiveStep = (child, tail) => {
+        return setValueAtPath(child, tail, value);
+    };
+
     if (Array.isArray(target)) {
-        return setValueInArray(target, pathSegments, value);
+        return updateArrayAtIndex(
+            target,
+            pathSegments,
+            (copy, index) => {
+                copy.splice(index, 1, value);
+                return copy;
+            },
+            recurse
+        );
     }
 
     if (isRecord(target)) {
-        return setValueInObject(target, pathSegments, value);
+        return updateObjectAtKey(
+            target,
+            pathSegments,
+            (record, key) => {
+                return { ...record, [key]: value };
+            },
+            recurse
+        );
     }
 
     return createStructureForPath(pathSegments, value);

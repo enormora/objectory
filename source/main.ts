@@ -113,23 +113,16 @@ function isFactory<T extends Record<string, AllowedObjectShapeValues>>(value: un
     return isRecord(value) && typeof value.build === 'function';
 }
 
-type ArrayFactoryMarker = { [arrayFactorySymbol]?: boolean };
-
 function isArrayFactoryValue(value: unknown): value is ArrayFactoryValue<Record<string, AllowedObjectShapeValues>> {
     if (!isRecord(value)) {
         return false;
     }
 
-    const marker = value as ArrayFactoryMarker;
-
-    if (marker[arrayFactorySymbol] !== true) {
+    if (value[arrayFactorySymbol] !== true) {
         return false;
     }
 
-    const maybeFactory = (value as { factory?: unknown }).factory;
-    const maybeLength = (value as { length?: unknown }).length;
-
-    return isFactory(maybeFactory) && typeof maybeLength === 'number';
+    return isFactory(value.factory) && typeof value.length === 'number';
 }
 
 function isPrimitiveAllowedObjectShapeValue(value: unknown): boolean {
@@ -199,7 +192,7 @@ function createOverrideWrapper(value: unknown): OverrideWrapper {
 }
 
 function isOverrideWrapper(value: unknown): value is OverrideWrapper {
-    return isRecord(value) && (value as Partial<OverrideWrapper>)[overrideWrapperSymbol] === true;
+    return isRecord(value) && value[overrideWrapperSymbol] === true;
 }
 
 function createRemovePropertySentinel(): RemoveProperty {
@@ -208,12 +201,26 @@ function createRemovePropertySentinel(): RemoveProperty {
     };
 }
 
-// eslint-disable-next-line max-statements, complexity -- needs to be refactored
-function prepareOverrideValue(value: unknown, nested = false): unknown {
+function mapRecordEntries(
+    record: Record<PropertyKey, unknown>,
+    mapValue: (child: unknown) => unknown
+): Record<string, unknown> {
+    const prepared: Record<string, unknown> = {};
+
+    for (const [key, child] of Object.entries(record)) {
+        prepared[key] = mapValue(child);
+    }
+
+    return prepared;
+}
+
+function prepareNestedOverrideValue(value: unknown): unknown {
+    if (value === undefined) {
+        return createRemovePropertySentinel();
+    }
+
     if (Array.isArray(value)) {
-        return value.map((item) => {
-            return prepareOverrideValue(item, true);
-        });
+        return value.map(prepareNestedOverrideValue);
     }
 
     if (value instanceof Date) {
@@ -221,28 +228,32 @@ function prepareOverrideValue(value: unknown, nested = false): unknown {
     }
 
     if (isRecord(value)) {
-        const prepared: Record<string, unknown> = {};
-
-        for (const [nestedKey, nestedValue] of Object.entries(value)) {
-            if (nestedValue === undefined) {
-                prepared[nestedKey] = nested ? createRemovePropertySentinel() : undefined;
-            } else {
-                prepared[nestedKey] = prepareOverrideValue(nestedValue, true);
-            }
-        }
-
-        return prepared;
+        return mapRecordEntries(value, prepareNestedOverrideValue);
     }
 
-    if (nested && value === undefined) {
-        return createRemovePropertySentinel();
+    return value;
+}
+
+function prepareOverrideValue(value: unknown): unknown {
+    if (Array.isArray(value)) {
+        return value.map(prepareNestedOverrideValue);
+    }
+
+    if (value instanceof Date) {
+        return value;
+    }
+
+    if (isRecord(value)) {
+        return mapRecordEntries(value, (child) => {
+            return child === undefined ? undefined : prepareNestedOverrideValue(child);
+        });
     }
 
     return value;
 }
 
 function isRemoveProperty(value: unknown): value is RemoveProperty {
-    return isRecord(value) && (value as Partial<RemoveProperty>)[removePropertySymbol] === true;
+    return isRecord(value) && value[removePropertySymbol] === true;
 }
 
 function isNoOverride(override: unknown): override is typeof noOverrideSymbol {
@@ -324,9 +335,9 @@ function materializeTemplateArray(
     });
 }
 
-function materializeFactoryWithOverride(
-    value: ObjectoryFactory<Record<string, AllowedObjectShapeValues>>,
-    override: NormalizedOverride
+function withMaterializedOverride(
+    override: NormalizedOverride,
+    materialize: (overrideValue: unknown) => AllowedObjectShapeValues
 ): AllowedObjectShapeValues | RemoveProperty {
     if (override.applied && isRemoveProperty(override.value)) {
         return override.value;
@@ -334,26 +345,25 @@ function materializeFactoryWithOverride(
 
     const resolvedOverride = override.applied ? override.value : undefined;
 
-    return buildFactoryValue(value, resolvedOverride);
+    return materialize(resolvedOverride);
+}
+
+function materializeFactoryWithOverride(
+    value: ObjectoryFactory<Record<string, AllowedObjectShapeValues>>,
+    override: NormalizedOverride
+): AllowedObjectShapeValues | RemoveProperty {
+    return withMaterializedOverride(override, (resolved) => {
+        return buildFactoryValue(value, resolved);
+    });
 }
 
 function materializeArrayFactoryWithOverride(
     value: ArrayFactoryValue<Record<string, AllowedObjectShapeValues>>,
     override: NormalizedOverride
 ): AllowedObjectShapeValues | RemoveProperty {
-    if (!override.applied) {
-        return materializeArrayFactoryValue(value, undefined);
-    }
-
-    if (isRemoveProperty(override.value)) {
-        return override.value;
-    }
-
-    if (override.value === undefined) {
-        return materializeArrayFactoryValue(value, undefined);
-    }
-
-    return materializeArrayFactoryValue(value, override.value);
+    return withMaterializedOverride(override, (resolved) => {
+        return materializeArrayFactoryValue(value, resolved);
+    });
 }
 
 function materializeTemplateWithOverride(
@@ -361,19 +371,9 @@ function materializeTemplateWithOverride(
     override: NormalizedOverride,
     resolve: (value: AllowedGeneratorReturnShape, overrideValue: unknown) => AllowedObjectShapeValues
 ): AllowedObjectShapeValues | RemoveProperty {
-    if (!override.applied) {
-        return materializeTemplateArray(value, undefined, resolve);
-    }
-
-    if (isRemoveProperty(override.value)) {
-        return override.value;
-    }
-
-    if (override.value === undefined) {
-        return materializeTemplateArray(value, undefined, resolve);
-    }
-
-    return materializeTemplateArray(value, override.value, resolve);
+    return withMaterializedOverride(override, (resolved) => {
+        return materializeTemplateArray(value, resolved, resolve);
+    });
 }
 
 function materializeLeafValue(
