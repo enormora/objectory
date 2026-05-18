@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { normalizePath, removePropertyAtPath, setValueAtPath } from './path-operations.ts';
+import { addValueAtPath, normalizePath, removePropertyAtPath, setValueAtPath } from './path-operations.ts';
 
 test('normalizePath() splits dotted strings into segments', () => {
     assert.deepStrictEqual(normalizePath('foo.bar.baz'), ['foo', 'bar', 'baz']);
@@ -97,4 +97,82 @@ test('setValueAtPath() updates array indices', () => {
     assert.deepStrictEqual(result, {
         values: [-1, 'not-a-number', 1]
     });
+});
+
+test('addValueAtPath() adds a new top-level property immutably', () => {
+    const original = { foo: 'value' } as const;
+
+    const result = addValueAtPath(original, ['extra'], 'new');
+
+    assert.deepStrictEqual(result, { foo: 'value', extra: 'new' });
+    assert.deepStrictEqual(original, { foo: 'value' });
+});
+
+test('addValueAtPath() adds a nested property', () => {
+    const original = {
+        outer: {
+            inner: { keep: 'stay' }
+        }
+    } as const;
+
+    const result = addValueAtPath(original, ['outer', 'inner', 'extra'], 'new');
+
+    assert.deepStrictEqual(result, {
+        outer: {
+            inner: { keep: 'stay', extra: 'new' }
+        }
+    });
+});
+
+test('addValueAtPath() splice-inserts into arrays at index', () => {
+    const original = {
+        values: [-1, 1]
+    } as const;
+
+    const result = addValueAtPath(original, ['values', 1], 0);
+
+    assert.deepStrictEqual(result, {
+        values: [-1, 0, 1]
+    });
+});
+
+test('addValueAtPath() appends to arrays when index equals length', () => {
+    const original = {
+        values: [-1, 0]
+    } as const;
+
+    const result = addValueAtPath(original, ['values', original.values.length], 1);
+
+    assert.deepStrictEqual(result, {
+        values: [-1, 0, 1]
+    });
+});
+
+test('addValueAtPath() leaves arrays untouched when index is out of range', () => {
+    const original = {
+        values: [-1, 0]
+    } as const;
+    const outOfRangeIndex = original.values.length + 1;
+
+    const result = addValueAtPath(original, ['values', outOfRangeIndex], 1);
+
+    assert.deepStrictEqual(result, {
+        values: [-1, 0]
+    });
+});
+
+test('addValueAtPath() throws when the target object key already exists', () => {
+    const original = { foo: 'value' } as const;
+
+    assert.throws(() => {
+        return addValueAtPath(original, ['foo'], 'other');
+    }, /already exists/u);
+});
+
+test('addValueAtPath() leaves value untouched when parent path is missing', () => {
+    const original = { outer: { inner: { keep: 'stay' } } } as const;
+
+    const result = addValueAtPath(original, ['outer', 'missing', 'extra'], 'new');
+
+    assert.deepStrictEqual(result, { outer: { inner: { keep: 'stay' } } });
 });

@@ -1,5 +1,5 @@
 /* eslint-disable @stylistic/indent-binary-ops, @stylistic/operator-linebreak, @stylistic/indent -- conflicts with prettier */
-import { normalizePath, removePropertyAtPath, setValueAtPath } from './path-operations.ts';
+import { addValueAtPath, normalizePath, removePropertyAtPath, setValueAtPath } from './path-operations.ts';
 import { isRecord } from './record.ts';
 
 const arrayFactorySymbol: unique symbol = Symbol('objectory.arrayFactory');
@@ -51,6 +51,7 @@ export type ObjectoryFactory<ObjectShape extends Record<string, AllowedObjectSha
     readonly buildList: (options?: { readonly length?: number }) => ObjectShape[];
     readonly buildInvalidWithout: (path: string) => unknown;
     readonly buildInvalidWithChanged: (path: string, value: unknown) => unknown;
+    readonly buildInvalidWithAdditional: (path: string, value: unknown) => unknown;
 };
 
 export type ShapeToGeneratorReturnValueHelper<T> = T extends readonly (infer U)[]
@@ -529,6 +530,16 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
             const baseObject = factory.build();
 
             return setValueAtPath(baseObject, pathSegments, newValue);
+        },
+        buildInvalidWithAdditional(path, additionalValue) {
+            const pathSegments = normalizePath(path);
+            const baseObject = factory.build();
+
+            if (pathSegments.length === 0) {
+                return baseObject;
+            }
+
+            return addValueAtPath(baseObject, pathSegments, additionalValue);
         }
     };
 

@@ -135,6 +135,14 @@ Build an object with the property at `path` replaced by `value`, even if it brea
 const invalidAge = personFactory.buildInvalidWithChanged('age', 'unknown');
 ```
 
+### `factory.buildInvalidWithAdditional(path, value)`
+
+Build an object with an additional property added at `path`, useful for testing schemas that reject unknown fields. Throws if a property already exists at the given object path; for array paths, the value is splice-inserted at the given index.
+
+```ts
+const withExtra = personFactory.buildInvalidWithAdditional('nickname', 'Jay');
+```
+
 ## Prior art
 
 Objectory is heavily inspired by the excellent [`cooky-cutter`](https://github.com/skovy/cooky-cutter) and [`fishery`](https://github.com/thoughtbot/fishery) libraries — thank you for paving the way for ergonomic test data builders.
