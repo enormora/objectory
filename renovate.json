@@ -4,6 +4,8 @@
     "labels": ["renovate"],
     "dependencyDashboard": false,
     "rebaseStalePrs": true,
+    "automerge": true,
+    "automergeType": "branch",
     "lockFileMaintenance": {
         "enabled": true,
         "automerge": true
@@ -13,12 +15,6 @@
             "matchPackagePatterns": ["^@enormora/eslint-config"],
             "groupName": "@enormora/eslint-config",
             "groupSlug": "enormora-eslint-config"
-        },
-        {
-            "matchDepTypes": ["dependencies", "devDependencies"],
-            "matchUpdateTypes": ["minor", "patch"],
-            "automerge": true,
-            "automergeType": "branch"
         }
     ]
 }
