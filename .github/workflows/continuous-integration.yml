@@ -22,3 +22,7 @@ jobs:
               run: npm clean-install
             - name: Run all tests
               run: npx just test
+            - name: Run packtory dry-run
+              env:
+                  NPM_TOKEN: dry-run
+              run: npx packtory publish
