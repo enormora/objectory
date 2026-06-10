@@ -27,7 +27,7 @@
         "@types/node": "24.13.1",
         "eslint": "9.39.4",
         "prettier": "3.8.3",
-        "rust-just": "1.51.0",
+        "rust-just": "1.52.0",
         "typescript": "6.0.3"
     }
 }
