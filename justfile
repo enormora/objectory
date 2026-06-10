@@ -17,5 +17,11 @@ test-unit:
 
 test: compile lint test-unit
 
-publish-package args="": compile
-	packtory publish {{ args }}
+packtory-dry-run: compile
+	packtory publish
+
+packtory-publish: compile
+	packtory publish --no-dry-run
+
+release-gate:
+	github-release-gate
