@@ -2,15 +2,15 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { createFactory } from './main.ts';
 
-test('extend() merges base and extension outputs', () => {
-    const baseFactory = createFactory<{ foo: string; count: number }>(() => {
+test('extend() merges base and extension outputs', function () {
+    const baseFactory = createFactory<{ foo: string; count: number; }>(function () {
         return {
             foo: 'base',
             count: 1
         };
     });
 
-    const extendedFactory = baseFactory.extend<{ foo: string; count: number; bar: string }>(() => {
+    const extendedFactory = baseFactory.extend<{ foo: string; count: number; bar: string; }>(function () {
         return {
             bar: 'extended',
             foo: 'extended foo'
@@ -25,11 +25,11 @@ test('extend() merges base and extension outputs', () => {
     });
 });
 
-test('extend() supports overrides for new properties', () => {
-    const baseFactory = createFactory<{ foo: string; nested: { value: string } }>(() => {
+test('extend() supports overrides for new properties', function () {
+    const baseFactory = createFactory<{ foo: string; nested: { value: string; }; }>(function () {
         return {
             foo: 'base',
-            nested: createFactory(() => {
+            nested: createFactory(function () {
                 return { value: 'nested base' };
             })
         };
@@ -37,9 +37,9 @@ test('extend() supports overrides for new properties', () => {
 
     const extendedFactory = baseFactory.extend<{
         foo: string;
-        nested: { value: string };
+        nested: { value: string; };
         extra: string;
-    }>(() => {
+    }>(function () {
         return {
             extra: 'default extra'
         };

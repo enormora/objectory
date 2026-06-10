@@ -6,30 +6,32 @@ type Path = readonly PathSegment[];
 
 const integerSegmentPattern = /^\d+$/u;
 
+function toPathSegment(segment: string): PathSegment {
+    return integerSegmentPattern.test(segment) ? Number(segment) : segment;
+}
+
 export function normalizePath(path: string): Path {
-    return path.split('.').map((segment) => {
-        if (integerSegmentPattern.test(segment)) {
-            return Number(segment);
-        }
-        return segment;
-    });
+    return path.split('.').map(toPathSegment);
 }
 
 function toKey(segment: PathSegment): string {
     return typeof segment === 'number' ? segment.toString() : segment;
 }
 
-function shallowCloneObject(target: Record<string, unknown>): Record<string, unknown> {
+function shallowCloneObject(target: Readonly<Record<string, unknown>>): Record<string, unknown> {
     return { ...target };
 }
 
-function removeDirectKey(target: Record<string, unknown>, key: string): Record<string, unknown> {
-    const { [key]: _removed, ...rest } = target;
-    return rest;
+function removeDirectKey(target: Readonly<Record<string, unknown>>, key: string): Record<string, unknown> {
+    return Object.fromEntries(
+        Object.entries(target).filter(function ([ entryKey ]) {
+            return entryKey !== key;
+        })
+    );
 }
 
-type ArrayTerminal = (copy: unknown[], index: number) => unknown[];
-type ObjectTerminal = (target: Record<string, unknown>, key: string) => Record<string, unknown>;
+type ArrayTerminal = (target: readonly unknown[], index: number) => readonly unknown[];
+type ObjectTerminal = (target: Readonly<Record<string, unknown>>, key: string) => Record<string, unknown>;
 type RecursiveStep = (child: unknown, tail: Path) => unknown;
 
 function updateArrayAtIndex(
@@ -37,26 +39,23 @@ function updateArrayAtIndex(
     pathSegments: Path,
     onTerminal: ArrayTerminal,
     onRecurse: RecursiveStep
-): unknown[] {
-    const [head, ...tail] = pathSegments;
+): readonly unknown[] {
+    const [ head, ...tail ] = pathSegments;
     const index = typeof head === 'number' ? head : Number(head);
 
     if (!Number.isInteger(index) || index < 0 || index >= target.length) {
         return target.slice();
     }
 
-    const copy = target.slice();
-
     if (tail.length === 0) {
-        return onTerminal(copy, index);
+        return onTerminal(target, index);
     }
 
-    copy[index] = onRecurse(copy[index], tail);
-    return copy;
+    return target.with(index, onRecurse(target[index], tail));
 }
 
 function applyRecursiveObjectUpdate(
-    target: Record<string, unknown>,
+    target: Readonly<Record<string, unknown>>,
     key: string,
     tail: Path,
     onRecurse: RecursiveStep
@@ -75,12 +74,12 @@ function applyRecursiveObjectUpdate(
 }
 
 function updateObjectAtKey(
-    target: Record<string, unknown>,
+    target: Readonly<Record<string, unknown>>,
     pathSegments: Path,
     onTerminal: ObjectTerminal,
     onRecurse: RecursiveStep
 ): Record<string, unknown> {
-    const [head, ...tail] = pathSegments;
+    const [ head, ...tail ] = pathSegments;
 
     if (head === undefined) {
         return shallowCloneObject(target);
@@ -108,9 +107,8 @@ export function removePropertyAtPath(target: unknown, pathSegments: Path): unkno
         return updateArrayAtIndex(
             target,
             pathSegments,
-            (copy, index) => {
-                copy.splice(index, 1);
-                return copy;
+            function (arrayTarget, index) {
+                return arrayTarget.toSpliced(index, 1);
             },
             removePropertyAtPath
         );
@@ -124,7 +122,7 @@ export function removePropertyAtPath(target: unknown, pathSegments: Path): unkno
 }
 
 function createStructureForPath(pathSegments: Path, value: unknown): unknown {
-    const [head, ...tail] = pathSegments;
+    const [ head, ...tail ] = pathSegments;
 
     if (head === undefined) {
         return value;
@@ -146,7 +144,7 @@ export function setValueAtPath(target: unknown, pathSegments: Path, value: unkno
         return value;
     }
 
-    const recurse: RecursiveStep = (child, tail) => {
+    const recurse: RecursiveStep = function (child, tail) {
         return setValueAtPath(child, tail, value);
     };
 
@@ -154,9 +152,8 @@ export function setValueAtPath(target: unknown, pathSegments: Path, value: unkno
         return updateArrayAtIndex(
             target,
             pathSegments,
-            (copy, index) => {
-                copy.splice(index, 1, value);
-                return copy;
+            function (arrayTarget, index) {
+                return arrayTarget.toSpliced(index, 1, value);
             },
             recurse
         );
@@ -166,7 +163,7 @@ export function setValueAtPath(target: unknown, pathSegments: Path, value: unkno
         return updateObjectAtKey(
             target,
             pathSegments,
-            (record, key) => {
+            function (record, key) {
                 return { ...record, [key]: value };
             },
             recurse
@@ -176,17 +173,19 @@ export function setValueAtPath(target: unknown, pathSegments: Path, value: unkno
     return createStructureForPath(pathSegments, value);
 }
 
-function spliceInsertAtIndex(target: readonly unknown[], index: number, value: unknown): unknown[] {
+function spliceInsertAtIndex(target: readonly unknown[], index: number, value: unknown): readonly unknown[] {
     if (index > target.length) {
         return target.slice();
     }
 
-    const copy = target.slice();
-    copy.splice(index, 0, value);
-    return copy;
+    return target.toSpliced(index, 0, value);
 }
 
-function addNewKeyOrThrow(target: Record<string, unknown>, key: string, value: unknown): Record<string, unknown> {
+function addNewKeyOrThrow(
+    target: Readonly<Record<string, unknown>>,
+    key: string,
+    value: unknown
+): Record<string, unknown> {
     if (Object.hasOwn(target, key)) {
         throw new Error(`Cannot add property at path "${key}" because it already exists`);
     }
@@ -214,8 +213,8 @@ function addValueAtArrayPath(
     pathSegments: Path,
     value: unknown,
     onRecurse: RecursiveStep
-): unknown[] {
-    const [head, ...tail] = pathSegments;
+): readonly unknown[] {
+    const [ head, ...tail ] = pathSegments;
     const index = typeof head === 'number' ? head : Number(head);
 
     if (!Number.isInteger(index) || index < 0) {
@@ -230,12 +229,12 @@ function addValueAtArrayPath(
 }
 
 function addValueAtObjectPath(
-    target: Record<string, unknown>,
+    target: Readonly<Record<string, unknown>>,
     pathSegments: Path,
     value: unknown,
     onRecurse: RecursiveStep
 ): Record<string, unknown> {
-    const [head, ...tail] = pathSegments;
+    const [ head, ...tail ] = pathSegments;
 
     if (head === undefined) {
         return shallowCloneObject(target);
@@ -259,7 +258,7 @@ export function addValueAtPath(target: unknown, pathSegments: Path, value: unkno
         return target;
     }
 
-    const recurse: RecursiveStep = (child, tail) => {
+    const recurse: RecursiveStep = function (child, tail) {
         return addValueAtPath(child, tail, value);
     };
 

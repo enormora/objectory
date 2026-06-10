@@ -25,8 +25,8 @@ type Bus = {
     readonly passengers: readonly Passenger[];
 };
 
-test('build() returns the given factory object as is', () => {
-    const factory = createFactory<Person>(() => {
+test('build() returns the given factory object as is', function () {
+    const factory = createFactory<Person>(function () {
         return {
             name: 'John Doe',
             age: 42
@@ -38,12 +38,12 @@ test('build() returns the given factory object as is', () => {
     assert.deepStrictEqual<Person>(actual, { name: 'John Doe', age: 42 });
 });
 
-test('build() returns the given factory object as is even when using nested factories', () => {
-    const factory = createFactory<{ top: { second: { third: string; level: number } } }>(() => {
+test('build() returns the given factory object as is even when using nested factories', function () {
+    const factory = createFactory<{ top: { second: { third: string; level: number; }; }; }>(function () {
         return {
-            top: createFactory(() => {
+            top: createFactory(function () {
                 return {
-                    second: createFactory(() => {
+                    second: createFactory(function () {
                         return {
                             level: 42,
                             third: 'foo'
@@ -59,8 +59,8 @@ test('build() returns the given factory object as is even when using nested fact
     assert.deepStrictEqual(actual, { top: { second: { level: 42, third: 'foo' } } });
 });
 
-test('build() allows overriding certain top level properties', () => {
-    const factory = createFactory<Person>(() => {
+test('build() allows overriding certain top level properties', function () {
+    const factory = createFactory<Person>(function () {
         return {
             name: 'John Doe',
             age: 42
@@ -72,8 +72,8 @@ test('build() allows overriding certain top level properties', () => {
     assert.deepStrictEqual<Person>(actual, { name: 'John Doe', age: 24 });
 });
 
-test('build() allows overriding all top level properties', () => {
-    const factory = createFactory<Person>(() => {
+test('build() allows overriding all top level properties', function () {
+    const factory = createFactory<Person>(function () {
         return {
             name: 'John Doe',
             age: 42
@@ -85,15 +85,15 @@ test('build() allows overriding all top level properties', () => {
     assert.deepStrictEqual<Person>(actual, { name: 'Foobar', age: 24 });
 });
 
-test('build() allows overriding two-level nested properties partially', () => {
-    const passengersFactory = createFactory<Passengers>(() => {
+test('build() allows overriding two-level nested properties partially', function () {
+    const passengersFactory = createFactory<Passengers>(function () {
         return {
             totalWeight: 0,
             amount: 0
         };
     });
 
-    const carFactory = createFactory<Car>(() => {
+    const carFactory = createFactory<Car>(function () {
         return {
             passengers: passengersFactory
         };
@@ -104,15 +104,15 @@ test('build() allows overriding two-level nested properties partially', () => {
     assert.deepStrictEqual<Car>(actual, { passengers: { amount: 4, totalWeight: 0 } });
 });
 
-test('build() allows overriding two-level nested properties fully', () => {
-    const passengersFactory = createFactory<Passengers>(() => {
+test('build() allows overriding two-level nested properties fully', function () {
+    const passengersFactory = createFactory<Passengers>(function () {
         return {
             totalWeight: 0,
             amount: 0
         };
     });
 
-    const carFactory = createFactory<Car>(() => {
+    const carFactory = createFactory<Car>(function () {
         return {
             passengers: passengersFactory
         };
@@ -123,12 +123,12 @@ test('build() allows overriding two-level nested properties fully', () => {
     assert.deepStrictEqual<Car>(actual, { passengers: { amount: 4, totalWeight: 24 } });
 });
 
-test('build() allows overriding three-level nested properties partially', () => {
-    const factory = createFactory<{ top: { second: { third: string; level: number } } }>(() => {
+test('build() allows overriding three-level nested properties partially', function () {
+    const factory = createFactory<{ top: { second: { third: string; level: number; }; }; }>(function () {
         return {
-            top: createFactory(() => {
+            top: createFactory(function () {
                 return {
-                    second: createFactory(() => {
+                    second: createFactory(function () {
                         return {
                             level: 42,
                             third: 'foo'
@@ -144,15 +144,15 @@ test('build() allows overriding three-level nested properties partially', () => 
     assert.deepStrictEqual(actual, { top: { second: { third: 'foo', level: 21 } } });
 });
 
-test('build() resolves factories nested inside arrays', () => {
-    const passengerFactory = createFactory<Passenger>(() => {
+test('build() resolves factories nested inside arrays', function () {
+    const passengerFactory = createFactory<Passenger>(function () {
         return {
             name: 'John Doe',
             age: 42
         };
     });
 
-    const busFactory = createFactory<Bus>(() => {
+    const busFactory = createFactory<Bus>(function () {
         return {
             passengers: passengerFactory.asArray({ length: 1 })
         };
@@ -170,15 +170,15 @@ test('build() resolves factories nested inside arrays', () => {
     });
 });
 
-test('build() returns empty arrays by default when using factories as arrays', () => {
-    const passengerFactory = createFactory<Passenger>(() => {
+test('build() returns empty arrays by default when using factories as arrays', function () {
+    const passengerFactory = createFactory<Passenger>(function () {
         return {
             name: 'John Doe',
             age: 42
         };
     });
 
-    const busFactory = createFactory<Bus>(() => {
+    const busFactory = createFactory<Bus>(function () {
         return {
             passengers: passengerFactory.asArray()
         };
@@ -191,15 +191,15 @@ test('build() returns empty arrays by default when using factories as arrays', (
     });
 });
 
-test('build() uses length when configuring factories as arrays', () => {
-    const passengerFactory = createFactory<Passenger>(() => {
+test('build() uses length when configuring factories as arrays', function () {
+    const passengerFactory = createFactory<Passenger>(function () {
         return {
             name: 'John Doe',
             age: 42
         };
     });
 
-    const busFactory = createFactory<Bus>(() => {
+    const busFactory = createFactory<Bus>(function () {
         return {
             passengers: passengerFactory.asArray({ length: 2 })
         };
@@ -221,15 +221,15 @@ test('build() uses length when configuring factories as arrays', () => {
     });
 });
 
-test('build() allows overriding factories nested inside arrays', () => {
-    const passengerFactory = createFactory<Passenger>(() => {
+test('build() allows overriding factories nested inside arrays', function () {
+    const passengerFactory = createFactory<Passenger>(function () {
         return {
             name: 'John Doe',
             age: 42
         };
     });
 
-    const busFactory = createFactory<Bus>(() => {
+    const busFactory = createFactory<Bus>(function () {
         return {
             passengers: passengerFactory.asArray()
         };
@@ -253,15 +253,15 @@ test('build() allows overriding factories nested inside arrays', () => {
     });
 });
 
-test('build() allows overriding factories nested inside arrays in arbitrary elements', () => {
-    const passengerFactory = createFactory<Passenger>(() => {
+test('build() allows overriding factories nested inside arrays in arbitrary elements', function () {
+    const passengerFactory = createFactory<Passenger>(function () {
         return {
             name: 'John Doe',
             age: 42
         };
     });
 
-    const busFactory = createFactory<Bus>(() => {
+    const busFactory = createFactory<Bus>(function () {
         return {
             passengers: passengerFactory.asArray()
         };
@@ -292,23 +292,23 @@ test('build() allows overriding factories nested inside arrays in arbitrary elem
     });
 });
 
-test('build() allows overriding factories with plain arrays', () => {
-    const factory = createFactory<{ items: string[] }>(() => {
+test('build() allows overriding factories with plain arrays', function () {
+    const factory = createFactory<{ items: string[]; }>(function () {
         return {
-            items: ['foo', 'baz']
+            items: [ 'foo', 'baz' ]
         };
     });
 
     const actual = factory.build({
-        items: ['bar']
+        items: [ 'bar' ]
     });
 
     assert.deepStrictEqual(actual, {
-        items: ['bar']
+        items: [ 'bar' ]
     });
 });
 
-const passengerFactoryForTypes = createFactory<Passenger>(() => {
+const passengerFactoryForTypes = createFactory<Passenger>(function () {
     return {
         name: 'Type Jane',
         age: 30
@@ -316,14 +316,14 @@ const passengerFactoryForTypes = createFactory<Passenger>(() => {
 });
 
 // @ts-expect-error -- arrays of factories must use `asArray()`
-createFactory<Bus>(() => {
+createFactory<Bus>(function () {
     return {
-        passengers: [passengerFactoryForTypes]
+        passengers: [ passengerFactoryForTypes ]
     };
 });
 
-test('build() works with numbers', () => {
-    const factory = createFactory<{ foo: number }>(() => {
+test('build() works with numbers', function () {
+    const factory = createFactory<{ foo: number; }>(function () {
         return {
             foo: 42
         };
@@ -338,8 +338,8 @@ test('build() works with numbers', () => {
     });
 });
 
-test('build() works with strings', () => {
-    const factory = createFactory<{ foo: string }>(() => {
+test('build() works with strings', function () {
+    const factory = createFactory<{ foo: string; }>(function () {
         return {
             foo: 'bar'
         };
@@ -354,8 +354,8 @@ test('build() works with strings', () => {
     });
 });
 
-test('build() works with booleans', () => {
-    const factory = createFactory<{ foo: boolean }>(() => {
+test('build() works with booleans', function () {
+    const factory = createFactory<{ foo: boolean; }>(function () {
         return {
             foo: true
         };
@@ -370,8 +370,8 @@ test('build() works with booleans', () => {
     });
 });
 
-test('build() works with nullable types', () => {
-    const factory = createFactory<{ foo: boolean | null }>(() => {
+test('build() works with nullable types', function () {
+    const factory = createFactory<{ foo: boolean | null; }>(function () {
         return {
             foo: null
         };
@@ -386,8 +386,8 @@ test('build() works with nullable types', () => {
     });
 });
 
-test('build() works with undefined types', () => {
-    const factory = createFactory<{ foo: boolean | undefined }>(() => {
+test('build() works with undefined types', function () {
+    const factory = createFactory<{ foo: boolean | undefined; }>(function () {
         return {
             foo: undefined
         };
@@ -402,11 +402,11 @@ test('build() works with undefined types', () => {
     });
 });
 
-test('build() works with functions', () => {
-    const fn = (value: number): number => {
+test('build() works with functions', function () {
+    const fn = function (value: number): number {
         return value + 1;
     };
-    const factory = createFactory<{ foo: (value: number) => number }>(() => {
+    const factory = createFactory<{ foo: (value: number) => number; }>(function () {
         return {
             foo: fn
         };
@@ -419,8 +419,8 @@ test('build() works with functions', () => {
     });
 });
 
-test('build() works with Date', () => {
-    const factory = createFactory<{ foo: Date }>(() => {
+test('build() works with Date', function () {
+    const factory = createFactory<{ foo: Date; }>(function () {
         return {
             foo: new Date(0)
         };
@@ -433,8 +433,8 @@ test('build() works with Date', () => {
     });
 });
 
-test('build() works with overriding optional fields with undefined', () => {
-    const factory = createFactory<{ foo?: string | undefined }>(() => {
+test('build() works with overriding optional fields with undefined', function () {
+    const factory = createFactory<{ foo?: string | undefined; }>(function () {
         return {
             foo: 'bar'
         };
@@ -445,8 +445,8 @@ test('build() works with overriding optional fields with undefined', () => {
     assert.deepStrictEqual(actual, { foo: undefined });
 });
 
-test('build() works with overriding nullable fields with null', () => {
-    const factory = createFactory<{ foo: string | null }>(() => {
+test('build() works with overriding nullable fields with null', function () {
+    const factory = createFactory<{ foo: string | null; }>(function () {
         return {
             foo: 'bar'
         };
@@ -457,10 +457,10 @@ test('build() works with overriding nullable fields with null', () => {
     assert.deepStrictEqual(actual, { foo: null });
 });
 
-test('build() works with overriding optional and nullable fields with undefined', () => {
-    const factory = createFactory<{ baz: { foo: { bar: string } | null | undefined } }>(() => {
+test('build() works with overriding optional and nullable fields with undefined', function () {
+    const factory = createFactory<{ baz: { foo: { bar: string; } | null | undefined; }; }>(function () {
         return {
-            baz: createFactory<{ foo: { bar: string } | null | undefined }>(() => {
+            baz: createFactory<{ foo: { bar: string; } | null | undefined; }>(function () {
                 return { foo: undefined };
             })
         };
@@ -471,38 +471,38 @@ test('build() works with overriding optional and nullable fields with undefined'
     assert.deepStrictEqual(actual, { baz: { foo: null } });
 });
 
-test('build() works with overriding arrays of primitives', () => {
-    const factory = createFactory<{ foo: string[] }>(() => {
+test('build() works with overriding arrays of primitives', function () {
+    const factory = createFactory<{ foo: string[]; }>(function () {
         return {
-            foo: ['qux']
+            foo: [ 'qux' ]
         };
     });
 
-    const actual = factory.build({ foo: ['bar'] });
+    const actual = factory.build({ foo: [ 'bar' ] });
 
-    assert.deepStrictEqual(actual, { foo: ['bar'] });
+    assert.deepStrictEqual(actual, { foo: [ 'bar' ] });
 });
 
-test('build() works with overriding nested optional arrays of primitives', () => {
-    const factory = createFactory<{ bar: { foo?: string[] } }>(() => {
+test('build() works with overriding nested optional arrays of primitives', function () {
+    const factory = createFactory<{ bar: { foo?: string[]; }; }>(function () {
         return {
-            bar: createFactory<{ foo?: string[] }>(() => {
+            bar: createFactory<{ foo?: string[]; }>(function () {
                 return {};
             })
         };
     });
 
-    const actual = factory.build({ bar: { foo: ['bar'] } });
+    const actual = factory.build({ bar: { foo: [ 'bar' ] } });
 
-    assert.deepStrictEqual(actual, { bar: { foo: ['bar'] } });
+    assert.deepStrictEqual(actual, { bar: { foo: [ 'bar' ] } });
 });
 
-test('build() works with overriding nullish Partial<> object', () => {
-    type InnerType = { foo: string; bar: string | null; baz: number } | null | undefined;
-    type PartialInnerType = Partial<InnerType>;
-    const factory = createFactory<{ bar: PartialInnerType }>(() => {
+test('build() works with overriding nullish Partial<> object', function () {
+    type InnerType = { readonly foo: string; readonly bar: string | null; readonly baz: number; } | null | undefined;
+    type PartialInnerType = Readonly<Partial<InnerType>>;
+    const factory = createFactory<{ bar: PartialInnerType; }>(function () {
         return {
-            bar: createFactory(() => {
+            bar: createFactory(function () {
                 return { foo: 'bar', bar: 'baz' };
             })
         };

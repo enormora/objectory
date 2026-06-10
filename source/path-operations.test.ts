@@ -2,24 +2,24 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { addValueAtPath, normalizePath, removePropertyAtPath, setValueAtPath } from './path-operations.ts';
 
-test('normalizePath() splits dotted strings into segments', () => {
-    assert.deepStrictEqual(normalizePath('foo.bar.baz'), ['foo', 'bar', 'baz']);
+test('normalizePath() splits dotted strings into segments', function () {
+    assert.deepStrictEqual(normalizePath('foo.bar.baz'), [ 'foo', 'bar', 'baz' ]);
 });
 
-test('normalizePath() splits dotted strings with numbers into segments', () => {
-    assert.deepStrictEqual(normalizePath('foo.0.baz'), ['foo', 0, 'baz']);
+test('normalizePath() splits dotted strings with numbers into segments', function () {
+    assert.deepStrictEqual(normalizePath('foo.0.baz'), [ 'foo', 0, 'baz' ]);
 });
 
-test('removePropertyAtPath() removes top-level property without mutating original', () => {
+test('removePropertyAtPath() removes top-level property without mutating original', function () {
     const original = { foo: 'value', bar: 42 } as const;
 
-    const result = removePropertyAtPath(original, ['bar']);
+    const result = removePropertyAtPath(original, [ 'bar' ]);
 
     assert.deepStrictEqual(result, { foo: 'value' });
     assert.deepStrictEqual(original, { foo: 'value', bar: 42 });
 });
 
-test('removePropertyAtPath() removes nested property', () => {
+test('removePropertyAtPath() removes nested property', function () {
     const original = {
         outer: {
             inner: {
@@ -29,7 +29,7 @@ test('removePropertyAtPath() removes nested property', () => {
         }
     } as const;
 
-    const result = removePropertyAtPath(original, ['outer', 'inner', 'leaf']);
+    const result = removePropertyAtPath(original, [ 'outer', 'inner', 'leaf' ]);
 
     assert.deepStrictEqual(result, {
         outer: {
@@ -40,27 +40,27 @@ test('removePropertyAtPath() removes nested property', () => {
     });
 });
 
-test('removePropertyAtPath() removes array element when index provided', () => {
+test('removePropertyAtPath() removes array element when index provided', function () {
     const original = {
-        items: [-1, 0, 1]
+        items: [ -1, 0, 1 ]
     } as const;
 
-    const result = removePropertyAtPath(original, ['items', 1]);
+    const result = removePropertyAtPath(original, [ 'items', 1 ]);
 
     assert.deepStrictEqual(result, {
-        items: [-1, 1]
+        items: [ -1, 1 ]
     });
 });
 
-test('removePropertyAtPath() leaves value untouched when path missing', () => {
+test('removePropertyAtPath() leaves value untouched when path missing', function () {
     const original = { foo: { bar: 1 } } as const;
 
-    const result = removePropertyAtPath(original, ['foo', 'baz']);
+    const result = removePropertyAtPath(original, [ 'foo', 'baz' ]);
 
     assert.deepStrictEqual(result, { foo: { bar: 1 } });
 });
 
-test('setValueAtPath() updates nested object properties immutably', () => {
+test('setValueAtPath() updates nested object properties immutably', function () {
     const original = {
         outer: {
             inner: {
@@ -69,7 +69,7 @@ test('setValueAtPath() updates nested object properties immutably', () => {
         }
     } as const;
 
-    const result = setValueAtPath(original, ['outer', 'inner', 'value'], 'not-a-number');
+    const result = setValueAtPath(original, [ 'outer', 'inner', 'value' ], 'not-a-number');
 
     assert.deepStrictEqual(result, {
         outer: {
@@ -87,35 +87,35 @@ test('setValueAtPath() updates nested object properties immutably', () => {
     });
 });
 
-test('setValueAtPath() updates array indices', () => {
+test('setValueAtPath() updates array indices', function () {
     const original = {
-        values: [-1, 0, 1]
+        values: [ -1, 0, 1 ]
     } as const;
 
-    const result = setValueAtPath(original, ['values', 1], 'not-a-number');
+    const result = setValueAtPath(original, [ 'values', 1 ], 'not-a-number');
 
     assert.deepStrictEqual(result, {
-        values: [-1, 'not-a-number', 1]
+        values: [ -1, 'not-a-number', 1 ]
     });
 });
 
-test('addValueAtPath() adds a new top-level property immutably', () => {
+test('addValueAtPath() adds a new top-level property immutably', function () {
     const original = { foo: 'value' } as const;
 
-    const result = addValueAtPath(original, ['extra'], 'new');
+    const result = addValueAtPath(original, [ 'extra' ], 'new');
 
     assert.deepStrictEqual(result, { foo: 'value', extra: 'new' });
     assert.deepStrictEqual(original, { foo: 'value' });
 });
 
-test('addValueAtPath() adds a nested property', () => {
+test('addValueAtPath() adds a nested property', function () {
     const original = {
         outer: {
             inner: { keep: 'stay' }
         }
     } as const;
 
-    const result = addValueAtPath(original, ['outer', 'inner', 'extra'], 'new');
+    const result = addValueAtPath(original, [ 'outer', 'inner', 'extra' ], 'new');
 
     assert.deepStrictEqual(result, {
         outer: {
@@ -124,55 +124,55 @@ test('addValueAtPath() adds a nested property', () => {
     });
 });
 
-test('addValueAtPath() splice-inserts into arrays at index', () => {
+test('addValueAtPath() splice-inserts into arrays at index', function () {
     const original = {
-        values: [-1, 1]
+        values: [ -1, 1 ]
     } as const;
 
-    const result = addValueAtPath(original, ['values', 1], 0);
+    const result = addValueAtPath(original, [ 'values', 1 ], 0);
 
     assert.deepStrictEqual(result, {
-        values: [-1, 0, 1]
+        values: [ -1, 0, 1 ]
     });
 });
 
-test('addValueAtPath() appends to arrays when index equals length', () => {
+test('addValueAtPath() appends to arrays when index equals length', function () {
     const original = {
-        values: [-1, 0]
+        values: [ -1, 0 ]
     } as const;
 
-    const result = addValueAtPath(original, ['values', original.values.length], 1);
+    const result = addValueAtPath(original, [ 'values', original.values.length ], 1);
 
     assert.deepStrictEqual(result, {
-        values: [-1, 0, 1]
+        values: [ -1, 0, 1 ]
     });
 });
 
-test('addValueAtPath() leaves arrays untouched when index is out of range', () => {
+test('addValueAtPath() leaves arrays untouched when index is out of range', function () {
     const original = {
-        values: [-1, 0]
+        values: [ -1, 0 ]
     } as const;
     const outOfRangeIndex = original.values.length + 1;
 
-    const result = addValueAtPath(original, ['values', outOfRangeIndex], 1);
+    const result = addValueAtPath(original, [ 'values', outOfRangeIndex ], 1);
 
     assert.deepStrictEqual(result, {
-        values: [-1, 0]
+        values: [ -1, 0 ]
     });
 });
 
-test('addValueAtPath() throws when the target object key already exists', () => {
+test('addValueAtPath() throws when the target object key already exists', function () {
     const original = { foo: 'value' } as const;
 
-    assert.throws(() => {
-        return addValueAtPath(original, ['foo'], 'other');
+    assert.throws(function () {
+        return addValueAtPath(original, [ 'foo' ], 'other');
     }, /already exists/u);
 });
 
-test('addValueAtPath() leaves value untouched when parent path is missing', () => {
+test('addValueAtPath() leaves value untouched when parent path is missing', function () {
     const original = { outer: { inner: { keep: 'stay' } } } as const;
 
-    const result = addValueAtPath(original, ['outer', 'missing', 'extra'], 'new');
+    const result = addValueAtPath(original, [ 'outer', 'missing', 'extra' ], 'new');
 
     assert.deepStrictEqual(result, { outer: { inner: { keep: 'stay' } } });
 });

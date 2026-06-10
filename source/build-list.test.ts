@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { createFactory } from './main.ts';
 
-test('buildList() returns an empty array by default', () => {
-    const factory = createFactory<{ foo: string }>(() => {
+test('buildList() returns an empty array by default', function () {
+    const factory = createFactory<{ foo: string; }>(function () {
         return {
             foo: 'bar'
         };
@@ -14,9 +14,9 @@ test('buildList() returns an empty array by default', () => {
     assert.deepStrictEqual(actual, []);
 });
 
-test('buildList() generates objects using the factory defaults', () => {
+test('buildList() generates objects using the factory defaults', function () {
     let counter = 0;
-    const factory = createFactory<{ index: number }>(() => {
+    const factory = createFactory<{ index: number; }>(function () {
         const value = counter;
         counter += 1;
 
@@ -27,11 +27,11 @@ test('buildList() generates objects using the factory defaults', () => {
 
     const actual = factory.buildList({ length: 3 });
 
-    assert.deepStrictEqual(actual, [{ index: 0 }, { index: 1 }, { index: 2 }]);
+    assert.deepStrictEqual(actual, [ { index: 0 }, { index: 1 }, { index: 2 } ]);
 });
 
-test('buildList() respects withOverrides()', () => {
-    const baseFactory = createFactory<{ label: string; count: number }>(() => {
+test('buildList() respects withOverrides()', function () {
+    const baseFactory = createFactory<{ label: string; count: number; }>(function () {
         return {
             label: 'base',
             count: 1

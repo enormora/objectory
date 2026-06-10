@@ -1,60 +1,26 @@
-import { baseConfig } from '@enormora/eslint-config-base';
+import { baseConfig, withCspellWords } from '@enormora/eslint-config-base';
 import { typescriptConfig } from '@enormora/eslint-config-typescript';
 import { nodeConfig, nodeConfigFileConfig } from '@enormora/eslint-config-node';
 
 export default [
     {
-        ignores: ['target/**/*']
+        ignores: [ 'target/**/*' ]
+    },
+    ...baseConfig,
+    {
+        ...withCspellWords([ 'objectory', 'enormora' ]),
+        files: [ '**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx,vue}' ]
     },
     {
-        ...baseConfig,
-        files: ['**/*.{js,jsx,cjs,mjs,ts,mts,cts,tsx}'],
-        rules: {
-            ...baseConfig.rules,
-
-            '@cspell/spellchecker': [
-                'error',
-                {
-                    autoFix: false,
-                    numSuggestions: 3,
-                    generateSuggestions: true,
-                    ignoreImports: true,
-                    ignoreImportProperties: true,
-                    checkIdentifiers: true,
-                    checkStrings: true,
-                    checkStringTemplates: true,
-                    checkJSXText: true,
-                    checkComments: true,
-                    cspell: {
-                        words: ['objectory', 'enormora'],
-                        ignoreWords: [],
-                        flagWords: [],
-                        ignoreRegExpList: [],
-                        includeRegExpList: [],
-                        allowCompoundWords: true,
-                        import: [],
-                        dictionaries: []
-                    },
-                    customWordListFile: undefined,
-                    debugMode: false
-                }
-            ]
-        }
+        ...nodeConfig,
+        files: [ '**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}' ]
     },
-    nodeConfig,
     {
         ...typescriptConfig,
-        files: ['**/*.ts']
+        files: [ '**/*.ts' ]
     },
     {
-        files: ['**/*.ts'],
-        rules: {
-            'functional/prefer-immutable-types': 'off',
-            'functional/type-declaration-immutability': 'off'
-        }
-    },
-    {
-        files: ['**/*.test.ts'],
+        files: [ '**/*.test.ts' ],
         rules: {
             '@typescript-eslint/no-floating-promises': [
                 'error',
@@ -72,7 +38,7 @@ export default [
     },
     {
         ...nodeConfigFileConfig,
-        files: ['eslint.config.js', 'prettier.config.js', 'packtory.config.js'],
+        files: [ 'eslint.config.js', 'packtory.config.js' ],
         rules: {
             ...nodeConfigFileConfig.rules,
 

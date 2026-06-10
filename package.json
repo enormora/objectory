@@ -3,7 +3,6 @@
     "version": "0.0.1",
     "main": "index.js",
     "type": "module",
-    "scripts": {},
     "engines": {
         "node": ">=22.18.0"
     },
@@ -11,22 +10,18 @@
         "type": "git",
         "url": "git+https://github.com/enormora/objectory.git"
     },
-    "keywords": [],
-    "author": "",
     "license": "MIT",
     "bugs": {
         "url": "https://github.com/enormora/objectory/issues"
     },
     "homepage": "https://github.com/enormora/objectory#readme",
-    "description": "",
     "devDependencies": {
-        "@enormora/eslint-config-base": "0.0.25",
-        "@enormora/eslint-config-node": "0.0.21",
-        "@enormora/eslint-config-typescript": "0.0.29",
+        "@enormora/eslint-config-base": "0.0.40",
+        "@enormora/eslint-config-node": "0.0.31",
+        "@enormora/eslint-config-typescript": "0.0.46",
         "@packtory/cli": "0.0.7",
         "@types/node": "24.13.1",
-        "eslint": "9.39.4",
-        "prettier": "3.8.3",
+        "eslint": "10.4.1",
         "rust-just": "1.52.0",
         "typescript": "6.0.3"
     }

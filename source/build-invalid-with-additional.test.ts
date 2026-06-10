@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { createFactory } from './main.ts';
 
-test('buildInvalidWithAdditional() adds a new top-level property', () => {
-    const factory = createFactory<{ name: string }>(() => {
+test('buildInvalidWithAdditional() adds a new top-level property', function () {
+    const factory = createFactory<{ name: string; }>(function () {
         return {
             name: 'Alice'
         };
@@ -17,10 +17,10 @@ test('buildInvalidWithAdditional() adds a new top-level property', () => {
     });
 });
 
-test('buildInvalidWithAdditional() adds a nested property using dotted path', () => {
-    const factory = createFactory<{ profile: { name: string } }>(() => {
+test('buildInvalidWithAdditional() adds a nested property using dotted path', function () {
+    const factory = createFactory<{ profile: { name: string; }; }>(function () {
         return {
-            profile: createFactory(() => {
+            profile: createFactory(function () {
                 return {
                     name: 'Alice'
                 };
@@ -38,34 +38,34 @@ test('buildInvalidWithAdditional() adds a nested property using dotted path', ()
     });
 });
 
-test('buildInvalidWithAdditional() splice-inserts into arrays at index', () => {
-    const factory = createFactory<{ values: number[] }>(() => {
+test('buildInvalidWithAdditional() splice-inserts into arrays at index', function () {
+    const factory = createFactory<{ values: number[]; }>(function () {
         return {
-            values: [-1, 1]
+            values: [ -1, 1 ]
         };
     });
 
     const actual = factory.buildInvalidWithAdditional('values.1', 0);
 
     assert.deepStrictEqual(actual, {
-        values: [-1, 0, 1]
+        values: [ -1, 0, 1 ]
     });
 });
 
-test('buildInvalidWithAdditional() throws when the property already exists', () => {
-    const factory = createFactory<{ name: string }>(() => {
+test('buildInvalidWithAdditional() throws when the property already exists', function () {
+    const factory = createFactory<{ name: string; }>(function () {
         return {
             name: 'Alice'
         };
     });
 
-    assert.throws(() => {
+    assert.throws(function () {
         return factory.buildInvalidWithAdditional('name', 'other');
     }, /already exists/u);
 });
 
-test('buildInvalidWithAdditional() leaves original defaults untouched', () => {
-    const factory = createFactory<{ flag: boolean }>(() => {
+test('buildInvalidWithAdditional() leaves original defaults untouched', function () {
+    const factory = createFactory<{ flag: boolean; }>(function () {
         return {
             flag: false
         };

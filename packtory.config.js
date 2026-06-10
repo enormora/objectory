@@ -31,7 +31,6 @@ export async function buildConfig() {
             additionalPackageJsonAttributes: {
                 repository: packageJson.repository,
                 license: packageJson.license,
-                author: packageJson.author,
                 engines: packageJson.engines
             }
         },
@@ -46,7 +45,7 @@ export async function buildConfig() {
                 ],
                 additionalPackageJsonAttributes: {
                     description: 'A library for defining JavaScript objects for testing',
-                    keywords: ['factory', 'factories', 'test', 'testing', 'test data']
+                    keywords: [ 'factory', 'factories', 'test', 'testing', 'test data' ]
                 },
                 additionalFiles: [
                     {
