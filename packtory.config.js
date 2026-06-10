@@ -4,27 +4,41 @@ import path from 'node:path';
 
 const projectFolder = process.cwd();
 const sourcesFolder = path.join(projectFolder, 'target/build/source');
-
-const npmToken = process.env.NPM_TOKEN;
+const licensePath = path.join(projectFolder, 'LICENSE');
+const readmePath = path.join(projectFolder, 'README.md');
 
 /** @returns {Promise<import('@packtory/cli').PacktoryConfig>} */
 export async function buildConfig() {
     const packageJsonContent = await fs.readFile('./package.json', { encoding: 'utf8' });
     const packageJson = JSON.parse(packageJsonContent);
 
-    if (npmToken === undefined) {
-        throw new Error('Missing NPM_TOKEN environment variable');
-    }
-
     return {
-        registrySettings: { token: npmToken },
+        registrySettings: {
+            auth: {
+                publish: { type: 'npm-oidc', provider: 'auto' },
+                metadata: 'auto'
+            }
+        },
+        checks: {
+            areTheTypesWrong: { enabled: true },
+            noDuplicatedFiles: { enabled: true },
+            requiredFiles: { enabled: true, files: [ 'LICENSE', 'README.md' ] },
+            maxBundleSize: { enabled: true, bytes: 100_000 },
+            noUnusedBundleDependencies: { enabled: true },
+            noDevDependencyImports: { enabled: true },
+            uniqueTargetPaths: { enabled: true }
+        },
         commonPackageSettings: {
             sourcesFolder,
             mainPackageJson: packageJson,
             includeSourceMapFiles: true,
+            publishSettings: {
+                access: 'public',
+                provenance: { type: 'auto' }
+            },
             additionalFiles: [
                 {
-                    sourceFilePath: path.join(projectFolder, 'LICENSE'),
+                    sourceFilePath: licensePath,
                     targetFilePath: 'LICENSE'
                 }
             ],
@@ -37,19 +51,20 @@ export async function buildConfig() {
         packages: [
             {
                 name: '@enormora/objectory',
-                entryPoints: [
-                    {
+                exportPackageJson: true,
+                roots: {
+                    main: {
                         js: 'main.js',
                         declarationFile: 'main.d.ts'
                     }
-                ],
+                },
                 additionalPackageJsonAttributes: {
                     description: 'A library for defining JavaScript objects for testing',
                     keywords: [ 'factory', 'factories', 'test', 'testing', 'test data' ]
                 },
                 additionalFiles: [
                     {
-                        sourceFilePath: path.join(projectFolder, 'README.md'),
+                        sourceFilePath: readmePath,
                         targetFilePath: 'README.md'
                     }
                 ]
