@@ -7,12 +7,10 @@ compile:
 	tsc --build
 
 lint:
-	prettier --check .
-	eslint . --cache --cache-location "./target/eslintcache" --cache-strategy content --max-warnings 0
+	eslint . .github --cache --cache-location "./target/eslintcache" --cache-strategy content --max-warnings 0
 
 lint-fix:
-	prettier --log-level warn --write .
-	eslint --fix .
+	eslint --fix . .github
 
 test-unit:
 	node --test --test-isolation="none" source/**/*.test.ts

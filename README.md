@@ -51,7 +51,7 @@ const tripFactory = createFactory(() => {
 
 const trip = tripFactory.build({
     driver: { name: 'Alex' },
-    passengers: [{ age: 40 }]
+    passengers: [ { age: 40 } ]
 });
 ```
 

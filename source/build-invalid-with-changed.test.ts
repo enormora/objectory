@@ -2,10 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { createFactory } from './main.ts';
 
-test('buildInvalidWithChanged() updates nested object properties', () => {
-    const factory = createFactory<{ profile: { name: string; age: number } }>(() => {
+test('buildInvalidWithChanged() updates nested object properties', function () {
+    const factory = createFactory<{ profile: { name: string; age: number; }; }>(function () {
         return {
-            profile: createFactory(() => {
+            profile: createFactory(function () {
                 return {
                     name: 'Alice',
                     age: 30
@@ -24,22 +24,22 @@ test('buildInvalidWithChanged() updates nested object properties', () => {
     });
 });
 
-test('buildInvalidWithChanged() accepts array path segments', () => {
-    const factory = createFactory<{ values: number[] }>(() => {
+test('buildInvalidWithChanged() accepts array path segments', function () {
+    const factory = createFactory<{ values: number[]; }>(function () {
         return {
-            values: [-1, 0, 1]
+            values: [ -1, 0, 1 ]
         };
     });
 
     const actual = factory.buildInvalidWithChanged('values.1', 'not-a-number');
 
     assert.deepStrictEqual(actual, {
-        values: [-1, 'not-a-number', 1]
+        values: [ -1, 'not-a-number', 1 ]
     });
 });
 
-test('buildInvalidWithChanged() leaves original defaults untouched', () => {
-    const factory = createFactory<{ flag: boolean }>(() => {
+test('buildInvalidWithChanged() leaves original defaults untouched', function () {
+    const factory = createFactory<{ flag: boolean; }>(function () {
         return {
             flag: false
         };
