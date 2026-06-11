@@ -23,5 +23,5 @@ packtory-dry-run: compile
 packtory-publish: compile
 	packtory publish --no-dry-run
 
-release-gate:
+release-gate: compile
 	github-release-gate
