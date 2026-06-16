@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { createFactory } from './main.ts';
 
 test('buildInvalidWithAdditional() adds a new top-level property', function () {
-    const factory = createFactory<{ name: string; }>(function () {
+    const factory = createFactory<{ readonly name: string; }>(function () {
         return {
             name: 'Alice'
         };
@@ -18,7 +18,7 @@ test('buildInvalidWithAdditional() adds a new top-level property', function () {
 });
 
 test('buildInvalidWithAdditional() adds a nested property using dotted path', function () {
-    const factory = createFactory<{ profile: { name: string; }; }>(function () {
+    const factory = createFactory<{ readonly profile: { readonly name: string; }; }>(function () {
         return {
             profile: createFactory(function () {
                 return {
@@ -39,7 +39,7 @@ test('buildInvalidWithAdditional() adds a nested property using dotted path', fu
 });
 
 test('buildInvalidWithAdditional() splice-inserts into arrays at index', function () {
-    const factory = createFactory<{ values: number[]; }>(function () {
+    const factory = createFactory<{ readonly values: readonly number[]; }>(function () {
         return {
             values: [ -1, 1 ]
         };
@@ -53,7 +53,7 @@ test('buildInvalidWithAdditional() splice-inserts into arrays at index', functio
 });
 
 test('buildInvalidWithAdditional() throws when the property already exists', function () {
-    const factory = createFactory<{ name: string; }>(function () {
+    const factory = createFactory<{ readonly name: string; }>(function () {
         return {
             name: 'Alice'
         };
@@ -65,7 +65,7 @@ test('buildInvalidWithAdditional() throws when the property already exists', fun
 });
 
 test('buildInvalidWithAdditional() leaves original defaults untouched', function () {
-    const factory = createFactory<{ flag: boolean; }>(function () {
+    const factory = createFactory<{ readonly flag: boolean; }>(function () {
         return {
             flag: false
         };

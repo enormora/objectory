@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { createFactory } from './main.ts';
 
 test('buildInvalidWithChanged() updates nested object properties', function () {
-    const factory = createFactory<{ profile: { name: string; age: number; }; }>(function () {
+    const factory = createFactory<{ readonly profile: { readonly name: string; readonly age: number; }; }>(function () {
         return {
             profile: createFactory(function () {
                 return {
@@ -25,7 +25,7 @@ test('buildInvalidWithChanged() updates nested object properties', function () {
 });
 
 test('buildInvalidWithChanged() accepts array path segments', function () {
-    const factory = createFactory<{ values: number[]; }>(function () {
+    const factory = createFactory<{ readonly values: readonly number[]; }>(function () {
         return {
             values: [ -1, 0, 1 ]
         };
@@ -39,7 +39,7 @@ test('buildInvalidWithChanged() accepts array path segments', function () {
 });
 
 test('buildInvalidWithChanged() leaves original defaults untouched', function () {
-    const factory = createFactory<{ flag: boolean; }>(function () {
+    const factory = createFactory<{ readonly flag: boolean; }>(function () {
         return {
             flag: false
         };
