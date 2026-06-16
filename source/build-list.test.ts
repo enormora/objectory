@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { createFactory } from './main.ts';
 
 test('buildList() returns an empty array by default', function () {
-    const factory = createFactory<{ foo: string; }>(function () {
+    const factory = createFactory<{ readonly foo: string; }>(function () {
         return {
             foo: 'bar'
         };
@@ -16,7 +16,7 @@ test('buildList() returns an empty array by default', function () {
 
 test('buildList() generates objects using the factory defaults', function () {
     let counter = 0;
-    const factory = createFactory<{ index: number; }>(function () {
+    const factory = createFactory<{ readonly index: number; }>(function () {
         const value = counter;
         counter += 1;
 
@@ -31,7 +31,7 @@ test('buildList() generates objects using the factory defaults', function () {
 });
 
 test('buildList() respects withOverrides()', function () {
-    const baseFactory = createFactory<{ label: string; count: number; }>(function () {
+    const baseFactory = createFactory<{ readonly label: string; readonly count: number; }>(function () {
         return {
             label: 'base',
             count: 1

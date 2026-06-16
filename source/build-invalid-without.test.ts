@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { createFactory } from './main.ts';
 
 test('buildInvalidWithout() removes a top level property', function () {
-    const factory = createFactory<{ foo: string; bar: number; }>(function () {
+    const factory = createFactory<{ readonly foo: string; readonly bar: number; }>(function () {
         return {
             foo: 'value',
             bar: 42
@@ -16,7 +16,9 @@ test('buildInvalidWithout() removes a top level property', function () {
 });
 
 test('buildInvalidWithout() removes a nested property using dotted path', function () {
-    const factory = createFactory<{ outer: { inner: { leaf: string; keep: string; }; }; }>(function () {
+    const factory = createFactory<
+        { readonly outer: { readonly inner: { readonly leaf: string; readonly keep: string; }; }; }
+    >(function () {
         return {
             outer: createFactory(function () {
                 return {
@@ -43,7 +45,7 @@ test('buildInvalidWithout() removes a nested property using dotted path', functi
 });
 
 test('buildInvalidWithout() removes array elements when index is provided', function () {
-    const factory = createFactory<{ items: number[]; }>(function () {
+    const factory = createFactory<{ readonly items: readonly number[]; }>(function () {
         return {
             items: [ -1, 0, 1 ]
         };

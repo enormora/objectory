@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { createFactory } from './main.ts';
 
 test('withOverrides() returns a factory with updated defaults', function () {
-    const factory = createFactory<{ foo: string; count: number; }>(function () {
+    const factory = createFactory<{ readonly foo: string; readonly count: number; }>(function () {
         return {
             foo: 'base',
             count: 1
@@ -17,7 +17,7 @@ test('withOverrides() returns a factory with updated defaults', function () {
 });
 
 test('withOverrides() merges nested factory overrides', function () {
-    const factory = createFactory<{ nested: { value: string; }; }>(function () {
+    const factory = createFactory<{ readonly nested: { readonly value: string; }; }>(function () {
         return {
             nested: createFactory(function () {
                 return { value: 'alpha' };
@@ -32,7 +32,7 @@ test('withOverrides() merges nested factory overrides', function () {
 });
 
 test('withOverrides() can be chained and still accepts build overrides', function () {
-    const factory = createFactory<{ foo: string; bar: string; }>(function () {
+    const factory = createFactory<{ readonly foo: string; readonly bar: string; }>(function () {
         return {
             foo: 'one',
             bar: 'two'

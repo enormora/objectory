@@ -39,7 +39,9 @@ test('build() returns the given factory object as is', function () {
 });
 
 test('build() returns the given factory object as is even when using nested factories', function () {
-    const factory = createFactory<{ top: { second: { third: string; level: number; }; }; }>(function () {
+    const factory = createFactory<
+        { readonly top: { readonly second: { readonly third: string; readonly level: number; }; }; }
+    >(function () {
         return {
             top: createFactory(function () {
                 return {
@@ -124,7 +126,9 @@ test('build() allows overriding two-level nested properties fully', function () 
 });
 
 test('build() allows overriding three-level nested properties partially', function () {
-    const factory = createFactory<{ top: { second: { third: string; level: number; }; }; }>(function () {
+    const factory = createFactory<
+        { readonly top: { readonly second: { readonly third: string; readonly level: number; }; }; }
+    >(function () {
         return {
             top: createFactory(function () {
                 return {
@@ -293,7 +297,7 @@ test('build() allows overriding factories nested inside arrays in arbitrary elem
 });
 
 test('build() allows overriding factories with plain arrays', function () {
-    const factory = createFactory<{ items: string[]; }>(function () {
+    const factory = createFactory<{ readonly items: readonly string[]; }>(function () {
         return {
             items: [ 'foo', 'baz' ]
         };
@@ -323,7 +327,7 @@ createFactory<Bus>(function () {
 });
 
 test('build() works with numbers', function () {
-    const factory = createFactory<{ foo: number; }>(function () {
+    const factory = createFactory<{ readonly foo: number; }>(function () {
         return {
             foo: 42
         };
@@ -339,7 +343,7 @@ test('build() works with numbers', function () {
 });
 
 test('build() works with strings', function () {
-    const factory = createFactory<{ foo: string; }>(function () {
+    const factory = createFactory<{ readonly foo: string; }>(function () {
         return {
             foo: 'bar'
         };
@@ -355,7 +359,7 @@ test('build() works with strings', function () {
 });
 
 test('build() works with booleans', function () {
-    const factory = createFactory<{ foo: boolean; }>(function () {
+    const factory = createFactory<{ readonly foo: boolean; }>(function () {
         return {
             foo: true
         };
@@ -371,7 +375,7 @@ test('build() works with booleans', function () {
 });
 
 test('build() works with nullable types', function () {
-    const factory = createFactory<{ foo: boolean | null; }>(function () {
+    const factory = createFactory<{ readonly foo: boolean | null; }>(function () {
         return {
             foo: null
         };
@@ -387,7 +391,7 @@ test('build() works with nullable types', function () {
 });
 
 test('build() works with undefined types', function () {
-    const factory = createFactory<{ foo: boolean | undefined; }>(function () {
+    const factory = createFactory<{ readonly foo: boolean | undefined; }>(function () {
         return {
             foo: undefined
         };
@@ -406,7 +410,7 @@ test('build() works with functions', function () {
     const fn = function (value: number): number {
         return value + 1;
     };
-    const factory = createFactory<{ foo: (value: number) => number; }>(function () {
+    const factory = createFactory<{ readonly foo: (value: number) => number; }>(function () {
         return {
             foo: fn
         };
@@ -420,7 +424,7 @@ test('build() works with functions', function () {
 });
 
 test('build() works with Date', function () {
-    const factory = createFactory<{ foo: Date; }>(function () {
+    const factory = createFactory<{ readonly foo: Date; }>(function () {
         return {
             foo: new Date(0)
         };
@@ -434,7 +438,7 @@ test('build() works with Date', function () {
 });
 
 test('build() works with overriding optional fields with undefined', function () {
-    const factory = createFactory<{ foo?: string | undefined; }>(function () {
+    const factory = createFactory<{ readonly foo?: string | undefined; }>(function () {
         return {
             foo: 'bar'
         };
@@ -446,7 +450,7 @@ test('build() works with overriding optional fields with undefined', function ()
 });
 
 test('build() works with overriding nullable fields with null', function () {
-    const factory = createFactory<{ foo: string | null; }>(function () {
+    const factory = createFactory<{ readonly foo: string | null; }>(function () {
         return {
             foo: 'bar'
         };
@@ -458,13 +462,16 @@ test('build() works with overriding nullable fields with null', function () {
 });
 
 test('build() works with overriding optional and nullable fields with undefined', function () {
-    const factory = createFactory<{ baz: { foo: { bar: string; } | null | undefined; }; }>(function () {
-        return {
-            baz: createFactory<{ foo: { bar: string; } | null | undefined; }>(function () {
-                return { foo: undefined };
-            })
-        };
-    });
+    type Bar = { readonly bar: string; };
+    const factory = createFactory<{ readonly baz: { readonly foo: Bar | null | undefined; }; }>(
+        function () {
+            return {
+                baz: createFactory<{ readonly foo: Bar | null | undefined; }>(function () {
+                    return { foo: undefined };
+                })
+            };
+        }
+    );
 
     const actual = factory.build({ baz: { foo: null } });
 
@@ -472,7 +479,7 @@ test('build() works with overriding optional and nullable fields with undefined'
 });
 
 test('build() works with overriding arrays of primitives', function () {
-    const factory = createFactory<{ foo: string[]; }>(function () {
+    const factory = createFactory<{ readonly foo: readonly string[]; }>(function () {
         return {
             foo: [ 'qux' ]
         };
@@ -484,9 +491,9 @@ test('build() works with overriding arrays of primitives', function () {
 });
 
 test('build() works with overriding nested optional arrays of primitives', function () {
-    const factory = createFactory<{ bar: { foo?: string[]; }; }>(function () {
+    const factory = createFactory<{ readonly bar: { readonly foo?: readonly string[]; }; }>(function () {
         return {
-            bar: createFactory<{ foo?: string[]; }>(function () {
+            bar: createFactory<{ readonly foo?: readonly string[]; }>(function () {
                 return {};
             })
         };
@@ -498,9 +505,10 @@ test('build() works with overriding nested optional arrays of primitives', funct
 });
 
 test('build() works with overriding nullish Partial<> object', function () {
-    type InnerType = { readonly foo: string; readonly bar: string | null; readonly baz: number; } | null | undefined;
+    type InnerShape = { readonly foo: string; readonly bar: string | null; readonly baz: number; };
+    type InnerType = InnerShape | null | undefined;
     type PartialInnerType = Readonly<Partial<InnerType>>;
-    const factory = createFactory<{ bar: PartialInnerType; }>(function () {
+    const factory = createFactory<{ readonly bar: PartialInnerType; }>(function () {
         return {
             bar: createFactory(function () {
                 return { foo: 'bar', bar: 'baz' };

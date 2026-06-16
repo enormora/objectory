@@ -3,19 +3,21 @@ import assert from 'node:assert';
 import { createFactory } from './main.ts';
 
 test('extend() merges base and extension outputs', function () {
-    const baseFactory = createFactory<{ foo: string; count: number; }>(function () {
+    const baseFactory = createFactory<{ readonly foo: string; readonly count: number; }>(function () {
         return {
             foo: 'base',
             count: 1
         };
     });
 
-    const extendedFactory = baseFactory.extend<{ foo: string; count: number; bar: string; }>(function () {
-        return {
-            bar: 'extended',
-            foo: 'extended foo'
-        };
-    });
+    const extendedFactory = baseFactory.extend<{ readonly foo: string; readonly count: number; readonly bar: string; }>(
+        function () {
+            return {
+                bar: 'extended',
+                foo: 'extended foo'
+            };
+        }
+    );
 
     assert.deepStrictEqual(baseFactory.build(), { foo: 'base', count: 1 });
     assert.deepStrictEqual(extendedFactory.build(), {
@@ -26,19 +28,21 @@ test('extend() merges base and extension outputs', function () {
 });
 
 test('extend() supports overrides for new properties', function () {
-    const baseFactory = createFactory<{ foo: string; nested: { value: string; }; }>(function () {
-        return {
-            foo: 'base',
-            nested: createFactory(function () {
-                return { value: 'nested base' };
-            })
-        };
-    });
+    const baseFactory = createFactory<{ readonly foo: string; readonly nested: { readonly value: string; }; }>(
+        function () {
+            return {
+                foo: 'base',
+                nested: createFactory(function () {
+                    return { value: 'nested base' };
+                })
+            };
+        }
+    );
 
     const extendedFactory = baseFactory.extend<{
-        foo: string;
-        nested: { value: string; };
-        extra: string;
+        readonly foo: string;
+        readonly nested: { readonly value: string; };
+        readonly extra: string;
     }>(function () {
         return {
             extra: 'default extra'

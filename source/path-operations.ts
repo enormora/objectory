@@ -43,7 +43,7 @@ function updateArrayAtIndex(
     const [ head, ...tail ] = pathSegments;
     const index = typeof head === 'number' ? head : Number(head);
 
-    if (!Number.isInteger(index) || index < 0 || index >= target.length) {
+    if (!Number.isSafeInteger(index) || index < 0 || index >= target.length) {
         return target.slice();
     }
 
@@ -153,7 +153,7 @@ export function setValueAtPath(target: unknown, pathSegments: Path, value: unkno
             target,
             pathSegments,
             function (arrayTarget, index) {
-                return arrayTarget.toSpliced(index, 1, value);
+                return arrayTarget.with(index, value);
             },
             recurse
         );
@@ -217,7 +217,7 @@ function addValueAtArrayPath(
     const [ head, ...tail ] = pathSegments;
     const index = typeof head === 'number' ? head : Number(head);
 
-    if (!Number.isInteger(index) || index < 0) {
+    if (!Number.isSafeInteger(index) || index < 0) {
         return target.slice();
     }
 
