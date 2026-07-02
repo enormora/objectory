@@ -23,7 +23,7 @@
         "@packtory/github-release-gate": "0.0.25",
         "@types/node": "24.13.2",
         "eslint": "10.6.0",
-        "rust-just": "1.54.0",
+        "rust-just": "1.55.1",
         "typescript": "6.0.3"
     }
 }
