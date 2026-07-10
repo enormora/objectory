@@ -113,7 +113,6 @@ function isArrayFactoryValue(value: unknown): value is ArrayFactoryValue<Record<
         return false;
     }
 
-    // eslint-disable-next-line unicorn/no-unsafe-property-key -- unique symbol keys are safe; the rule false-positives on symbol types
     if (value[arrayFactorySymbol] !== true) {
         return false;
     }
@@ -183,19 +182,16 @@ function isOverridesForFactory<F extends ObjectoryFactory<Record<string, Allowed
 function createOverrideWrapper(value: unknown): OverrideWrapper {
     return {
         value,
-        // eslint-disable-next-line unicorn/no-unsafe-property-key -- unique symbol keys are safe; the rule false-positives on symbol types
         [overrideWrapperSymbol]: true
     };
 }
 
 function isOverrideWrapper(value: unknown): value is OverrideWrapper {
-    // eslint-disable-next-line unicorn/no-unsafe-property-key -- unique symbol keys are safe; the rule false-positives on symbol types
     return isRecord(value) && value[overrideWrapperSymbol] === true;
 }
 
 function createRemovePropertySentinel(): RemoveProperty {
     return {
-        // eslint-disable-next-line unicorn/no-unsafe-property-key -- unique symbol keys are safe; the rule false-positives on symbol types
         [removePropertySymbol]: true
     };
 }
@@ -252,7 +248,6 @@ function prepareOverrideValue(value: unknown): unknown {
 }
 
 function isRemoveProperty(value: unknown): value is RemoveProperty {
-    // eslint-disable-next-line unicorn/no-unsafe-property-key -- unique symbol keys are safe; the rule false-positives on symbol types
     return isRecord(value) && value[removePropertySymbol] === true;
 }
 
@@ -459,7 +454,6 @@ function createArrayFactory<ObjectShape extends Record<string, AllowedObjectShap
     return {
         factory,
         length: options?.length ?? 0,
-        // eslint-disable-next-line unicorn/no-unsafe-property-key -- unique symbol keys are safe; the rule false-positives on symbol types
         [arrayFactorySymbol]: true
     };
 }
