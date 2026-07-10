@@ -1,6 +1,7 @@
 import { baseConfig, withCspellWords } from '@enormora/eslint-config-base';
 import { typescriptConfig } from '@enormora/eslint-config-typescript';
 import { nodeConfig, nodeConfigFileConfig } from '@enormora/eslint-config-node';
+import { nodeAssertConfig } from '@enormora/eslint-config-node-assert';
 
 export default [
     {
@@ -18,6 +19,10 @@ export default [
     {
         ...typescriptConfig,
         files: [ '**/*.ts' ]
+    },
+    {
+        ...nodeAssertConfig,
+        files: [ '**/*.test.ts' ]
     },
     {
         files: [ '**/*.test.ts' ],
