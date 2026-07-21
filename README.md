@@ -35,14 +35,24 @@ Objectory handles deeply nested factories, arrays, and targeted overrides so you
 ## Nested factories
 
 ```ts
-const passengerFactory = createFactory(() => {
+type Passenger = {
+    name: string;
+    age: number;
+};
+
+const passengerFactory = createFactory<Passenger>(() => {
     return {
         name: 'Jane Doe',
         age: 32
     };
 });
 
-const tripFactory = createFactory(() => {
+type Trip = {
+    driver: Passenger;
+    passengers: readonly Passenger[];
+};
+
+const tripFactory = createFactory<Trip>(() => {
     return {
         driver: passengerFactory,
         passengers: passengerFactory.asArray({ length: 2 })
@@ -62,7 +72,7 @@ const trip = tripFactory.build({
 Create a factory from a generator function. The generator returns the canonical shape for the objects you want to build.
 
 ```ts
-const personFactory = createFactory(() => {
+const personFactory = createFactory<Person>(() => {
     return {
         name: 'Jane Doe',
         age: 32
@@ -91,7 +101,11 @@ const passengers = personFactory.buildList({ length: 3 });
 Expose the factory as an array factory so it can be embedded in other factories.
 
 ```ts
-const busFactory = createFactory(() => ({
+type Bus = {
+    passengers: readonly Person[];
+};
+
+const busFactory = createFactory<Bus>(() => ({
     passengers: personFactory.asArray({ length: 2 })
 }));
 
@@ -112,7 +126,11 @@ const namedPerson = namedFactory.build();
 Derive a new factory by merging the base shape with additional fields from an extension generator.
 
 ```ts
-const employeeFactory = personFactory.extend(() => ({
+type Employee = Person & {
+    employeeId: string;
+};
+
+const employeeFactory = personFactory.extend<Employee>(() => ({
     employeeId: 'E-001'
 }));
 
