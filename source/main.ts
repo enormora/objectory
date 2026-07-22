@@ -51,7 +51,6 @@ export type ObjectoryFactory<ObjectShape extends Record<string, AllowedObjectSha
     readonly buildInvalidWithAdditional: (path: string, value: unknown) => unknown;
 };
 
-// eslint-disable-next-line functional/type-declaration-immutability -- recursive conditional type over an unconstrained generic; the rule resolves its immutability to "Unknown" and cannot be satisfied by any annotation
 export type ShapeToGeneratorReturnValueHelper<T> = T extends readonly (infer U)[]
     ? U extends Record<string, AllowedObjectShapeValues> ? ArrayFactoryReturnValue<U>
     : readonly ShapeToGeneratorReturnValueHelper<U>[]
