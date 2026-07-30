@@ -20,7 +20,7 @@
         "@enormora/eslint-config-node": "0.0.39",
         "@enormora/eslint-config-node-assert": "0.0.4",
         "@enormora/eslint-config-typescript": "0.0.61",
-        "@packtory/cli": "0.0.69",
+        "@packtory/cli": "0.0.70",
         "@packtory/github-release-gate": "0.0.36",
         "@types/node": "24.13.3",
         "eslint": "10.8.0",
