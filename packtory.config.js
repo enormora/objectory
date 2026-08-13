@@ -22,7 +22,7 @@ export async function buildConfig() {
             }
         },
         checks: {
-            areTheTypesWrong: { enabled: true },
+            typeScriptIntegrity: { enabled: true },
             noDuplicatedFiles: { enabled: true },
             requiredFiles: { enabled: true, files: [ 'LICENSE', 'README.md' ] },
             maxBundleSize: { enabled: true, bytes: 100_000 },
