@@ -7,7 +7,9 @@ const sourcesFolder = path.join(projectFolder, 'target/build/source');
 const licensePath = path.join(projectFolder, 'LICENSE');
 const readmePath = path.join(projectFolder, 'README.md');
 
-/** @returns {Promise<import('@packtory/cli').PacktoryConfig>} */
+/**
+ * @returns {Promise<import('@packtory/cli').PacktoryConfig>}
+ */
 export async function buildConfig() {
     const packageJsonContent = await fs.readFile('./package.json', { encoding: 'utf8' });
     const packageJson = JSON.parse(packageJsonContent);
