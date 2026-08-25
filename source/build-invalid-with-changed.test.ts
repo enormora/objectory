@@ -51,3 +51,27 @@ test('buildInvalidWithChanged() leaves original defaults untouched', function ()
     assert.deepStrictEqual(modified, { flag: 0 });
     assert.deepStrictEqual(original, { flag: false });
 });
+
+test('buildInvalidWithChanged() throws when the path cannot be resolved', function () {
+    const factory = createFactory<{ readonly outer: { readonly inner: string; }; }>(function () {
+        return {
+            outer: createFactory(function () {
+                return { inner: 'value' };
+            })
+        };
+    });
+
+    assert.throws(function () {
+        return factory.buildInvalidWithChanged('outerr.inner', 'other');
+    }, /Cannot resolve path "outerr\.inner"/u);
+});
+
+test('buildInvalidWithChanged() throws instead of creating structure through a primitive', function () {
+    const factory = createFactory<{ readonly count: number; }>(function () {
+        return { count: 1 };
+    });
+
+    assert.throws(function () {
+        return factory.buildInvalidWithChanged('count.deeper', 'other');
+    }, /Cannot resolve path "deeper"/u);
+});

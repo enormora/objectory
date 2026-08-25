@@ -77,3 +77,17 @@ test('buildInvalidWithAdditional() leaves original defaults untouched', function
     assert.deepStrictEqual(modified, { flag: false, extra: 'value' });
     assert.deepStrictEqual(original, { flag: false });
 });
+
+test('buildInvalidWithAdditional() throws when the parent path cannot be resolved', function () {
+    const factory = createFactory<{ readonly outer: { readonly inner: string; }; }>(function () {
+        return {
+            outer: createFactory(function () {
+                return { inner: 'value' };
+            })
+        };
+    });
+
+    assert.throws(function () {
+        return factory.buildInvalidWithAdditional('outerr.extra', 'value');
+    }, /Cannot resolve path "outerr\.extra"/u);
+});

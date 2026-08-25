@@ -436,10 +436,6 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
             const pathSegments = normalizePath(path);
             const baseObject = factory.build();
 
-            if (pathSegments.length === 0) {
-                return baseObject;
-            }
-
             return removePropertyAtPath(baseObject, pathSegments);
         },
         buildInvalidWithChanged(path, newValue) {
@@ -451,10 +447,6 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
         buildInvalidWithAdditional(path, additionalValue) {
             const pathSegments = normalizePath(path);
             const baseObject = factory.build();
-
-            if (pathSegments.length === 0) {
-                return baseObject;
-            }
 
             return addValueAtPath(baseObject, pathSegments, additionalValue);
         }
