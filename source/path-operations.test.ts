@@ -52,12 +52,29 @@ test('removePropertyAtPath() removes array element when index provided', functio
     });
 });
 
-test('removePropertyAtPath() leaves value untouched when path missing', function () {
+test('removePropertyAtPath() throws when an object key in the path does not exist', function () {
     const original = { foo: { bar: 1 } } as const;
 
-    const result = removePropertyAtPath(original, [ 'foo', 'baz' ]);
+    assert.throws(function () {
+        return removePropertyAtPath(original, [ 'foo', 'baz' ]);
+    }, /Cannot resolve path "baz"/u);
+});
 
-    assert.deepStrictEqual(result, { foo: { bar: 1 } });
+test('removePropertyAtPath() throws when an array index is out of range', function () {
+    const original = { items: [ -1, 0 ] } as const;
+    const outOfRangeIndex = original.items.length + 1;
+
+    assert.throws(function () {
+        return removePropertyAtPath(original, [ 'items', outOfRangeIndex ]);
+    }, /Cannot resolve path "3"/u);
+});
+
+test('removePropertyAtPath() throws when a path segment leads through a primitive', function () {
+    const original = { count: 1 } as const;
+
+    assert.throws(function () {
+        return removePropertyAtPath(original, [ 'count', 'deeper' ]);
+    }, /Cannot resolve path "deeper"/u);
 });
 
 test('setValueAtPath() updates nested object properties immutably', function () {
@@ -97,6 +114,30 @@ test('setValueAtPath() updates array indices', function () {
     assert.deepStrictEqual(result, {
         values: [ -1, 'not-a-number', 1 ]
     });
+});
+test('setValueAtPath() throws when an object key in the path does not exist', function () {
+    const original = { outer: { inner: 1 } } as const;
+
+    assert.throws(function () {
+        return setValueAtPath(original, [ 'outer', 'missing' ], 'value');
+    }, /Cannot resolve path "missing"/u);
+});
+
+test('setValueAtPath() throws instead of creating structure through a primitive', function () {
+    const original = { count: 1 } as const;
+
+    assert.throws(function () {
+        return setValueAtPath(original, [ 'count', 'deeper' ], 'value');
+    }, /Cannot resolve path "deeper"/u);
+});
+
+test('setValueAtPath() throws when the array index is out of range', function () {
+    const original = { values: [ -1, 0 ] } as const;
+    const outOfRangeIndex = original.values.length + 1;
+
+    assert.throws(function () {
+        return setValueAtPath(original, [ 'values', outOfRangeIndex ], 'value');
+    }, /Cannot resolve path "3"/u);
 });
 
 test('addValueAtPath() adds a new top-level property immutably', function () {
@@ -148,17 +189,15 @@ test('addValueAtPath() appends to arrays when index equals length', function () 
     });
 });
 
-test('addValueAtPath() leaves arrays untouched when index is out of range', function () {
+test('addValueAtPath() throws when the array index is beyond the end', function () {
     const original = {
         values: [ -1, 0 ]
     } as const;
     const outOfRangeIndex = original.values.length + 1;
 
-    const result = addValueAtPath(original, [ 'values', outOfRangeIndex ], 1);
-
-    assert.deepStrictEqual(result, {
-        values: [ -1, 0 ]
-    });
+    assert.throws(function () {
+        return addValueAtPath(original, [ 'values', outOfRangeIndex ], 1);
+    }, /Cannot resolve path "3"/u);
 });
 
 test('addValueAtPath() throws when the target object key already exists', function () {
@@ -169,10 +208,10 @@ test('addValueAtPath() throws when the target object key already exists', functi
     }, /already exists/u);
 });
 
-test('addValueAtPath() leaves value untouched when parent path is missing', function () {
+test('addValueAtPath() throws when the parent path does not exist', function () {
     const original = { outer: { inner: { keep: 'stay' } } } as const;
 
-    const result = addValueAtPath(original, [ 'outer', 'missing', 'extra' ], 'new');
-
-    assert.deepStrictEqual(result, { outer: { inner: { keep: 'stay' } } });
+    assert.throws(function () {
+        return addValueAtPath(original, [ 'outer', 'missing', 'extra' ], 'new');
+    }, /Cannot resolve path "missing\.extra"/u);
 });

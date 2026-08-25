@@ -18,6 +18,12 @@ function toKey(segment: PathSegment): string {
     return typeof segment === 'number' ? segment.toString() : segment;
 }
 
+function unresolvablePathError(pathSegments: Path): Error {
+    const path = pathSegments.map(toKey).join('.');
+
+    return new Error(`Cannot resolve path "${path}"`);
+}
+
 function shallowCloneObject(target: Readonly<Record<string, unknown>>): Record<string, unknown> {
     return { ...target };
 }
@@ -34,6 +40,10 @@ type ArrayTerminal = (target: readonly unknown[], index: number) => readonly unk
 type ObjectTerminal = (target: Readonly<Record<string, unknown>>, key: string) => Record<string, unknown>;
 type RecursiveStep = (child: unknown, tail: Path) => unknown;
 
+function toArrayIndex(segment: PathSegment | undefined): number {
+    return typeof segment === 'number' ? segment : Number(segment);
+}
+
 function updateArrayAtIndex(
     target: readonly unknown[],
     pathSegments: Path,
@@ -41,10 +51,10 @@ function updateArrayAtIndex(
     onRecurse: RecursiveStep
 ): readonly unknown[] {
     const [ head, ...tail ] = pathSegments;
-    const index = typeof head === 'number' ? head : Number(head);
+    const index = toArrayIndex(head);
 
     if (!Number.isSafeInteger(index) || index < 0 || index >= target.length) {
-        return target.slice();
+        throw unresolvablePathError(pathSegments);
     }
 
     if (tail.length === 0) {
@@ -82,13 +92,13 @@ function updateObjectAtKey(
     const [ head, ...tail ] = pathSegments;
 
     if (head === undefined) {
-        return shallowCloneObject(target);
+        throw unresolvablePathError(pathSegments);
     }
 
     const key = toKey(head);
 
     if (!Object.hasOwn(target, key)) {
-        return shallowCloneObject(target);
+        throw unresolvablePathError(pathSegments);
     }
 
     if (tail.length === 0) {
@@ -118,25 +128,7 @@ export function removePropertyAtPath(target: unknown, pathSegments: Path): unkno
         return updateObjectAtKey(target, pathSegments, removeDirectKey, removePropertyAtPath);
     }
 
-    return target;
-}
-
-function createStructureForPath(pathSegments: Path, value: unknown): unknown {
-    const [ head, ...tail ] = pathSegments;
-
-    if (head === undefined) {
-        return value;
-    }
-
-    if (typeof head === 'number') {
-        const result = Array.from<unknown>({ length: head + 1 });
-        result[head] = createStructureForPath(tail, value);
-        return result;
-    }
-
-    return {
-        [head]: createStructureForPath(tail, value)
-    };
+    throw unresolvablePathError(pathSegments);
 }
 
 export function setValueAtPath(target: unknown, pathSegments: Path, value: unknown): unknown {
@@ -170,18 +162,10 @@ export function setValueAtPath(target: unknown, pathSegments: Path, value: unkno
         );
     }
 
-    return createStructureForPath(pathSegments, value);
+    throw unresolvablePathError(pathSegments);
 }
 
-function spliceInsertAtIndex(target: readonly unknown[], index: number, value: unknown): readonly unknown[] {
-    if (index > target.length) {
-        return target.slice();
-    }
-
-    return target.toSpliced(index, 0, value);
-}
-
-function addNewKeyOrThrow(
+function addNewKey(
     target: Readonly<Record<string, unknown>>,
     key: string,
     value: unknown
@@ -193,19 +177,17 @@ function addNewKeyOrThrow(
     return { ...target, [key]: value };
 }
 
-function recurseIntoArrayElement(
+function insertIntoArray(
     target: readonly unknown[],
+    pathSegments: Path,
     index: number,
-    tail: Path,
-    onRecurse: RecursiveStep
-): unknown[] {
-    if (index >= target.length) {
-        return target.slice();
+    value: unknown
+): readonly unknown[] {
+    if (index > target.length) {
+        throw unresolvablePathError(pathSegments);
     }
 
-    const copy = target.slice();
-    copy[index] = onRecurse(copy[index], tail);
-    return copy;
+    return target.toSpliced(index, 0, value);
 }
 
 function addValueAtArrayPath(
@@ -215,17 +197,21 @@ function addValueAtArrayPath(
     onRecurse: RecursiveStep
 ): readonly unknown[] {
     const [ head, ...tail ] = pathSegments;
-    const index = typeof head === 'number' ? head : Number(head);
+    const index = toArrayIndex(head);
 
     if (!Number.isSafeInteger(index) || index < 0) {
-        return target.slice();
+        throw unresolvablePathError(pathSegments);
     }
 
     if (tail.length === 0) {
-        return spliceInsertAtIndex(target, index, value);
+        return insertIntoArray(target, pathSegments, index, value);
     }
 
-    return recurseIntoArrayElement(target, index, tail, onRecurse);
+    if (index >= target.length) {
+        throw unresolvablePathError(pathSegments);
+    }
+
+    return target.with(index, onRecurse(target[index], tail));
 }
 
 function addValueAtObjectPath(
@@ -237,17 +223,17 @@ function addValueAtObjectPath(
     const [ head, ...tail ] = pathSegments;
 
     if (head === undefined) {
-        return shallowCloneObject(target);
+        throw unresolvablePathError(pathSegments);
     }
 
     const key = toKey(head);
 
     if (tail.length === 0) {
-        return addNewKeyOrThrow(target, key, value);
+        return addNewKey(target, key, value);
     }
 
     if (!Object.hasOwn(target, key)) {
-        return shallowCloneObject(target);
+        throw unresolvablePathError(pathSegments);
     }
 
     return applyRecursiveObjectUpdate(target, key, tail, onRecurse);
@@ -270,5 +256,5 @@ export function addValueAtPath(target: unknown, pathSegments: Path, value: unkno
         return addValueAtObjectPath(target, pathSegments, value, recurse);
     }
 
-    return target;
+    throw unresolvablePathError(pathSegments);
 }

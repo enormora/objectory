@@ -312,20 +312,6 @@ test('build() allows overriding factories with plain arrays', function () {
     });
 });
 
-const passengerFactoryForTypes = createFactory<Passenger>(function () {
-    return {
-        name: 'Type Jane',
-        age: 30
-    };
-});
-
-// @ts-expect-error -- arrays of factories must use `asArray()`
-createFactory<Bus>(function () {
-    return {
-        passengers: [ passengerFactoryForTypes ]
-    };
-});
-
 test('build() works with numbers', function () {
     const factory = createFactory<{ readonly foo: number; }>(function () {
         return {

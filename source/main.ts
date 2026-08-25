@@ -5,7 +5,6 @@ import { isRecord } from './record.ts';
 const arrayFactorySymbol: unique symbol = Symbol('objectory.arrayFactory');
 const noOverrideSymbol: unique symbol = Symbol('objectory.noOverride');
 const overrideWrapperSymbol: unique symbol = Symbol('objectory.overrideWrapper');
-const removePropertySymbol: unique symbol = Symbol('objectory.removeProperty');
 const primitiveAllowedTypes = new Set([ 'string', 'number', 'boolean', 'bigint', 'symbol', 'function' ]);
 
 export type ArrayFactoryOptions = {
@@ -28,9 +27,8 @@ export type Overrides<ObjectShape extends Record<string, AllowedGeneratorReturnS
 };
 
 export type OverridesHelper<T> =
-    | RemoveProperty
     | (T extends ObjectoryFactory<infer U> ? Overrides<ShapeToGeneratorReturnValue<U>>
-        : T extends ArrayFactoryValue<infer U> ? readonly Overrides<ShapeToGeneratorReturnValue<U>>[]
+        : T extends ArrayFactoryValue<infer U> ? readonly (Overrides<ShapeToGeneratorReturnValue<U>> | undefined)[]
         : T extends readonly (infer U)[] ? readonly OverridesHelper<U>[]
         : T)
     | null
@@ -60,7 +58,8 @@ type TupleToGeneratorReturnValue<TupleShape> = {
 };
 
 export type ShapeToGeneratorReturnValueHelper<T> = T extends readonly (infer ItemShape)[]
-    ? number extends T['length'] ? ArrayItemToGeneratorReturnValue<ItemShape>
+    ? number extends T['length']
+        ? ArrayItemToGeneratorReturnValue<ItemShape> | readonly ShapeToGeneratorReturnValueHelper<ItemShape>[]
     : TupleToGeneratorReturnValue<T>
     : T extends Record<string, AllowedObjectShapeValues> ? ObjectoryFactory<T>
     : T;
@@ -85,10 +84,6 @@ type GeneratedArrayItemShape<ObjectShape extends Record<string, AllowedObjectSha
 type OverrideWrapper = { readonly value: unknown; readonly [overrideWrapperSymbol]: true; };
 
 type NormalizedOverride = { readonly applied: false; } | { readonly applied: true; readonly value: unknown; };
-
-export type RemoveProperty = { readonly [removePropertySymbol]: true; };
-
-type MaterializedValue = AllowedObjectShapeValues | RemoveProperty;
 
 export type GeneratorFunction<ObjectShape extends Record<string, AllowedObjectShapeValues>> = () =>
     ShapeToGeneratorReturnValue<ObjectShape>;
@@ -201,67 +196,6 @@ function isOverrideWrapper(value: unknown): value is OverrideWrapper {
     return isRecord(value) && value[overrideWrapperSymbol] === true;
 }
 
-function createRemovePropertySentinel(): RemoveProperty {
-    return {
-        [removePropertySymbol]: true
-    };
-}
-
-function mapRecordEntries(
-    record: Readonly<Record<PropertyKey, unknown>>,
-    mapValue: (child: unknown) => unknown
-): Record<string, unknown> {
-    const prepared: Record<string, unknown> = {};
-
-    for (const [ key, child ] of Object.entries(record)) {
-        prepared[key] = mapValue(child);
-    }
-
-    return prepared;
-}
-
-function prepareNestedOverrideValue(value: unknown): unknown {
-    if (value === undefined) {
-        return createRemovePropertySentinel();
-    }
-
-    if (Array.isArray(value)) {
-        return value.map(prepareNestedOverrideValue);
-    }
-
-    if (value instanceof Date) {
-        return value;
-    }
-
-    if (isRecord(value)) {
-        return mapRecordEntries(value, prepareNestedOverrideValue);
-    }
-
-    return value;
-}
-
-function prepareOverrideValue(value: unknown): unknown {
-    if (Array.isArray(value)) {
-        return value.map(prepareNestedOverrideValue);
-    }
-
-    if (value instanceof Date) {
-        return value;
-    }
-
-    if (isRecord(value)) {
-        return mapRecordEntries(value, function (child) {
-            return child === undefined ? undefined : prepareNestedOverrideValue(child);
-        });
-    }
-
-    return value;
-}
-
-function isRemoveProperty(value: unknown): value is RemoveProperty {
-    return isRecord(value) && value[removePropertySymbol] === true;
-}
-
 function isNoOverride(override: unknown): override is typeof noOverrideSymbol {
     return override === noOverrideSymbol;
 }
@@ -287,9 +221,9 @@ function materializeArrayFactoryValue(
     override: unknown
 ): AllowedObjectShapeValues {
     const overrideArray: readonly unknown[] | undefined = Array.isArray(override) ? override : undefined;
-    const maxLength = Math.max(arrayFactory.length, overrideArray?.length ?? 0);
+    const length = overrideArray?.length ?? arrayFactory.length;
 
-    return Array.from({ length: maxLength }, function (_unused, index) {
+    return Array.from({ length }, function (_unused, index) {
         const itemOverride = overrideArray?.[index];
 
         if (!isOverridesForFactory(arrayFactory.factory, itemOverride)) {
@@ -341,27 +275,25 @@ function materializeTemplateArray(
     });
 }
 
-function asMaterializedValue(value: MaterializedValue): MaterializedValue {
-    return value;
-}
-
 function withMaterializedOverride(
     override: NormalizedOverride,
     materialize: (overrideValue: unknown) => AllowedObjectShapeValues
-): MaterializedValue {
-    if (override.applied && isRemoveProperty(override.value)) {
-        return asMaterializedValue(override.value);
+): AllowedObjectShapeValues {
+    if (!override.applied) {
+        return materialize(undefined);
     }
 
-    const resolvedOverride = override.applied ? override.value : undefined;
+    if (override.value === undefined) {
+        return undefined;
+    }
 
-    return asMaterializedValue(materialize(resolvedOverride));
+    return materialize(override.value);
 }
 
 function materializeFactoryWithOverride(
     value: ObjectoryFactory<Record<string, AllowedObjectShapeValues>>,
     override: NormalizedOverride
-): MaterializedValue {
+): AllowedObjectShapeValues {
     return withMaterializedOverride(override, function (resolved) {
         return buildFactoryValue(value, resolved);
     });
@@ -370,7 +302,7 @@ function materializeFactoryWithOverride(
 function materializeArrayFactoryWithOverride(
     value: ArrayFactoryValue<Record<string, AllowedObjectShapeValues>>,
     override: NormalizedOverride
-): MaterializedValue {
+): AllowedObjectShapeValues {
     return withMaterializedOverride(override, function (resolved) {
         return materializeArrayFactoryValue(value, resolved);
     });
@@ -380,7 +312,7 @@ function materializeTemplateWithOverride(
     value: readonly AllowedGeneratorReturnShape[],
     override: NormalizedOverride,
     resolve: (value: AllowedGeneratorReturnShape, overrideValue: unknown) => AllowedObjectShapeValues
-): MaterializedValue {
+): AllowedObjectShapeValues {
     return withMaterializedOverride(override, function (resolved) {
         return materializeTemplateArray(value, resolved, resolve);
     });
@@ -389,22 +321,18 @@ function materializeTemplateWithOverride(
 function materializeLeafValue(
     value: AllowedGeneratorReturnShape,
     override: NormalizedOverride
-): MaterializedValue {
+): AllowedObjectShapeValues {
     if (override.applied) {
-        if (isRemoveProperty(override.value)) {
-            return asMaterializedValue(override.value);
-        }
-
-        return asMaterializedValue(assertAllowedObjectShapeValue(override.value));
+        return assertAllowedObjectShapeValue(override.value);
     }
 
-    return asMaterializedValue(assertAllowedObjectShapeValue(value));
+    return assertAllowedObjectShapeValue(value);
 }
 
 function materializeValue(
     value: AllowedGeneratorReturnShape,
     override: unknown
-): MaterializedValue {
+): AllowedObjectShapeValues {
     const normalizedOverride = normalizeOverride(override);
 
     if (isFactory(value)) {
@@ -436,15 +364,11 @@ function applyOverrides<GeneratedObject extends Record<string, AllowedGeneratorR
     for (const key of keys) {
         const value = generatedObject[key];
         const hasOverride = Object.hasOwn(overrides, key);
-        const overrideValue = hasOverride
-            ? createOverrideWrapper(prepareOverrideValue(overrides[key]))
-            : noOverrideSymbol;
+        const overrideValue = hasOverride ? createOverrideWrapper(overrides[key]) : noOverrideSymbol;
         const materialized = materializeValue(value, overrideValue);
 
-        if (!isRemoveProperty(materialized)) {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- ok in this case
-            entries.push([ key, materialized as GeneratedObjectToShapeHelper<GeneratedObject[typeof key]> ]);
-        }
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- ok in this case
+        entries.push([ key, materialized as GeneratedObjectToShapeHelper<GeneratedObject[typeof key]> ]);
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- ok in this case
@@ -519,10 +443,6 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
             const pathSegments = normalizePath(path);
             const baseObject = factory.build();
 
-            if (pathSegments.length === 0) {
-                return baseObject;
-            }
-
             return removePropertyAtPath(baseObject, pathSegments);
         },
         buildInvalidWithChanged(path, newValue) {
@@ -534,10 +454,6 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
         buildInvalidWithAdditional(path, additionalValue) {
             const pathSegments = normalizePath(path);
             const baseObject = factory.build();
-
-            if (pathSegments.length === 0) {
-                return baseObject;
-            }
 
             return addValueAtPath(baseObject, pathSegments, additionalValue);
         }

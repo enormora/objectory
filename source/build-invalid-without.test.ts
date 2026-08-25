@@ -57,3 +57,27 @@ test('buildInvalidWithout() removes array elements when index is provided', func
         items: [ -1, 1 ]
     });
 });
+
+test('buildInvalidWithout() throws when the path cannot be resolved', function () {
+    const factory = createFactory<{ readonly outer: { readonly inner: string; }; }>(function () {
+        return {
+            outer: createFactory(function () {
+                return { inner: 'value' };
+            })
+        };
+    });
+
+    assert.throws(function () {
+        return factory.buildInvalidWithout('outerr.inner');
+    }, /Cannot resolve path "outerr\.inner"/u);
+});
+
+test('buildInvalidWithout() throws when the path is empty', function () {
+    const factory = createFactory<{ readonly foo: string; }>(function () {
+        return { foo: 'value' };
+    });
+
+    assert.throws(function () {
+        return factory.buildInvalidWithout('');
+    }, /Cannot resolve path ""/u);
+});
