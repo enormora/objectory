@@ -51,9 +51,17 @@ export type ObjectoryFactory<ObjectShape extends Record<string, AllowedObjectSha
     readonly buildInvalidWithAdditional: (path: string, value: unknown) => unknown;
 };
 
-export type ShapeToGeneratorReturnValueHelper<T> = T extends readonly (infer U)[]
-    ? U extends Record<string, AllowedObjectShapeValues> ? ArrayFactoryReturnValue<U>
-    : readonly ShapeToGeneratorReturnValueHelper<U>[]
+type ArrayItemToGeneratorReturnValue<ItemShape> = [ItemShape] extends [Record<string, AllowedObjectShapeValues>]
+    ? ArrayFactoryValue<Extract<ItemShape, Record<string, AllowedObjectShapeValues>>>
+    : readonly ShapeToGeneratorReturnValueHelper<ItemShape>[];
+
+type TupleToGeneratorReturnValue<TupleShape> = {
+    readonly [Index in keyof TupleShape]: ShapeToGeneratorReturnValueHelper<TupleShape[Index]>;
+};
+
+export type ShapeToGeneratorReturnValueHelper<T> = T extends readonly (infer ItemShape)[]
+    ? number extends T['length'] ? ArrayItemToGeneratorReturnValue<ItemShape>
+    : TupleToGeneratorReturnValue<T>
     : T extends Record<string, AllowedObjectShapeValues> ? ObjectoryFactory<T>
     : T;
 
@@ -69,9 +77,6 @@ type GeneratedObjectToShapeHelper<T> = T extends ObjectoryFactory<infer U> ? U
     : T extends ArrayFactoryValue<infer U> ? readonly GeneratedArrayItemShape<U>[]
     : T extends readonly (infer U)[] ? readonly GeneratedObjectToShapeHelper<U>[]
     : T;
-
-export type ArrayFactoryReturnValue<T> = T extends Record<string, AllowedObjectShapeValues> ? ArrayFactoryValue<T>
-    : never;
 
 type GeneratedArrayItemShape<ObjectShape extends Record<string, AllowedObjectShapeValues>> = GeneratedObjectToShape<
     ShapeToGeneratorReturnValue<ObjectShape>
@@ -97,6 +102,13 @@ export type AllowedObjectShapeValues =
     | BaseTypes
     | readonly AllowedObjectShapeValues[]
     | { readonly [key: string]: AllowedObjectShapeValues; };
+
+type ObjectShapeValueOf<Value> = Value extends BaseTypes ? Value : ObjectShapeOf<Value>;
+
+export type ObjectShapeOf<Shape> = Shape extends BaseTypes ? never : {
+    [Key in keyof Shape]: ObjectShapeValueOf<Shape[Key]>;
+};
+
 export type AllowedGeneratorReturnShape =
     | ArrayFactoryValue<Record<string, AllowedObjectShapeValues>>
     | BaseTypes
@@ -483,12 +495,13 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
             const extendedGeneratorFunction = function (): ShapeToGeneratorReturnValue<ExtendedObjectShape> {
                 const baseGenerated = generatorFunction();
                 const extensionGenerated = extensionGenerator();
-
-                // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-unsafe-type-assertion -- ok in this case
-                return {
+                const mergedGenerated: Record<string, AllowedGeneratorReturnShape> = {
                     ...baseGenerated,
                     ...extensionGenerated
-                } as ShapeToGeneratorReturnValue<ExtendedObjectShape>;
+                };
+
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- ok in this case
+                return mergedGenerated as ShapeToGeneratorReturnValue<ExtendedObjectShape>;
             };
 
             const extendedDefaultOverrides =
@@ -533,6 +546,12 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
     return factory;
 }
 
+export function createFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>>(
+    generatorFunction: GeneratorFunction<ObjectShape>
+): ObjectoryFactory<ObjectShape>;
+export function createFactory<ObjectShape>(
+    generatorFunction: GeneratorFunction<ObjectShapeOf<ObjectShape>>
+): ObjectoryFactory<ObjectShapeOf<ObjectShape>>;
 export function createFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>>(
     generatorFunction: GeneratorFunction<ObjectShape>
 ): ObjectoryFactory<ObjectShape> {
