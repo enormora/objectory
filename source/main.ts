@@ -58,7 +58,8 @@ type TupleToGeneratorReturnValue<TupleShape> = {
 };
 
 export type ShapeToGeneratorReturnValueHelper<T> = T extends readonly (infer ItemShape)[]
-    ? number extends T['length'] ? ArrayItemToGeneratorReturnValue<ItemShape>
+    ? number extends T['length']
+        ? ArrayItemToGeneratorReturnValue<ItemShape> | readonly ShapeToGeneratorReturnValueHelper<ItemShape>[]
     : TupleToGeneratorReturnValue<T>
     : T extends Record<string, AllowedObjectShapeValues> ? ObjectoryFactory<T>
     : T;

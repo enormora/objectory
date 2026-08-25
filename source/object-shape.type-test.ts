@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'tstyche';
-import { createFactory } from './main.ts';
+import {
+    createFactory,
+    type ArrayFactoryValue,
+    type GeneratorFunction as ObjectoryGeneratorFunction
+} from './main.ts';
 
 type LiteralUnionShape = { readonly type: 'a' | 'b'; };
 type UniformArrayShape = { readonly tags: readonly string[]; };
@@ -9,6 +13,10 @@ type TupleShape = { readonly pair: readonly ['a', true]; };
 type VariantA = { readonly kind: 'a'; };
 type VariantB = { readonly kind: 'b'; };
 type UnionItemArrayShape = { readonly items: readonly (VariantA | VariantB)[]; };
+type SingleVariantArrayShape = { readonly items: ArrayFactoryValue<VariantA>; };
+type SingleVariantArrayGenerator = () => SingleVariantArrayShape;
+type PersonShape = { readonly name: string; readonly age: number; };
+type CrewShape = { readonly crew: readonly PersonShape[]; };
 
 /* eslint-disable @typescript-eslint/consistent-type-definitions -- only an interface lacks an implicit index signature, which is what the cases below are about */
 interface InterfaceShape {
@@ -81,9 +89,12 @@ describe('object shapes accepted by createFactory()', function () {
         expect(createFactory<UnionItemArrayShape>).type.toBeCallableWith(function () {
             return { items: unionFactory.asArray({ length: 1 }) };
         });
-        expect(createFactory<UnionItemArrayShape>).type.not.toBeCallableWith(function () {
-            return { items: singleVariantFactory.asArray({ length: 1 }) };
-        });
+        expect(singleVariantFactory.asArray({ length: 1 })).type.not.toBeAssignableTo<
+            ArrayFactoryValue<VariantA | VariantB>
+        >();
+        expect<SingleVariantArrayGenerator>().type.not.toBeAssignableTo<
+            ObjectoryGeneratorFunction<UnionItemArrayShape>
+        >();
     });
 
     test('accepts an interface as the object shape', function () {
@@ -124,5 +135,33 @@ describe('object shapes accepted by createFactory()', function () {
         });
 
         expect(extendedFactory.build()).type.toBeAssignableTo<ExtendedInterfaceShape>();
+    });
+});
+
+describe('array element shapes accepted by createFactory()', function () {
+    test('accepts a plain array of factories with differing defaults', function () {
+        const janeFactory = createFactory<PersonShape>(function () {
+            return { name: 'Jane Doe', age: 32 };
+        });
+        const johnFactory = createFactory<PersonShape>(function () {
+            return { name: 'John Doe', age: 42 };
+        });
+
+        expect(createFactory<CrewShape>).type.toBeCallableWith(function () {
+            return { crew: [ janeFactory, johnFactory ] };
+        });
+    });
+
+    test('rejects a plain array of already built objects', function () {
+        const personFactory = createFactory<PersonShape>(function () {
+            return { name: 'Jane Doe', age: 32 };
+        });
+
+        expect(createFactory<CrewShape>).type.not.toBeCallableWith(function () {
+            return { crew: personFactory.buildList({ length: 2 }) };
+        });
+        expect(createFactory<CrewShape>).type.not.toBeCallableWith(function () {
+            return { crew: [ { name: 'Jane Doe', age: 32 } ] };
+        });
     });
 });
