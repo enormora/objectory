@@ -164,6 +164,32 @@ function assertObjectValueComesFromFactory(value: unknown, path: string): void {
     }
 }
 
+function assertOverrideValueIsNotAFactory(value: unknown, path: string): void {
+    if (isFactory(value) || isArrayFactoryValue(value)) {
+        throw new TypeError(
+            `Invalid override at "${path}": factories cannot be used as override values, use build() or buildList()`
+        );
+    }
+}
+
+function assertOverrideContainsNoFactories(value: unknown, path: string): unknown {
+    assertOverrideValueIsNotAFactory(value, path);
+
+    if (Array.isArray(value)) {
+        for (const [ index, item ] of value.entries()) {
+            assertOverrideContainsNoFactories(item, `${path}.${index}`);
+        }
+    }
+
+    if (isRecord(value)) {
+        for (const [ key, child ] of Object.entries(value)) {
+            assertOverrideContainsNoFactories(child, `${path}.${key}`);
+        }
+    }
+
+    return value;
+}
+
 function assertAllowedObjectShapeValue(value: unknown): AllowedObjectShapeValues {
     if (!isAllowedObjectShapeValue(value)) {
         throw new TypeError('Invalid value provided for objectory factory');
@@ -385,7 +411,9 @@ function applyOverrides<GeneratedObject extends Record<string, AllowedGeneratorR
     for (const key of keys) {
         const value = generatedObject[key];
         const hasOverride = Object.hasOwn(overrides, key);
-        const overrideValue = hasOverride ? createOverrideWrapper(overrides[key]) : noOverrideSymbol;
+        const overrideValue = hasOverride
+            ? createOverrideWrapper(assertOverrideContainsNoFactories(overrides[key], String(key)))
+            : noOverrideSymbol;
         const materialized = materializeValue(value, overrideValue, String(key));
 
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- ok in this case

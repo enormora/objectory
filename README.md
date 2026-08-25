@@ -59,6 +59,9 @@ Build a single object, optionally overriding selected properties at any depth.
 const adult = personFactory.build({ age: 21 });
 ```
 
+Overrides are plain values, never factories: use `anotherFactory.build()` or `anotherFactory.buildList()` when the
+override values should come from another factory.
+
 ### `factory.buildList({ length })`
 
 Build an array of identical instances by repeatedly calling `build`.
