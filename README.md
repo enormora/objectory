@@ -47,6 +47,10 @@ const personFactory = createFactory<Person>(() => {
 });
 ```
 
+Every object in the generator must come from a factory: `createFactory()` for a nested object, `asArray()` or a plain
+array of factories for an array of objects. Anything else is rejected when building, so a type assertion that skips a
+nested factory fails loudly instead of silently dropping defaults on partial overrides.
+
 ### `factory.build(overrides?)`
 
 Build a single object, optionally overriding selected properties at any depth.
@@ -54,6 +58,9 @@ Build a single object, optionally overriding selected properties at any depth.
 ```ts
 const adult = personFactory.build({ age: 21 });
 ```
+
+Overrides are plain values, never factories: use `anotherFactory.build()` or `anotherFactory.buildList()` when the
+override values should come from another factory.
 
 ### `factory.buildList({ length })`
 
