@@ -153,13 +153,13 @@ const withExtra = personFactory.buildInvalidWithAdditional('nickname', 'Jay');
 
 What an override does depends on the kind of value the generator put in that property.
 
-| Generator value             | Plain override                                 | `undefined` override             | Override array length |
-| --------------------------- | ---------------------------------------------- | -------------------------------- | --------------------- |
-| Primitive, `Date`, function | replaces it                                    | sets the property to `undefined` | not applicable        |
-| Nested factory              | merges into the factory's defaults             | keeps the default                | not applicable        |
-| `asArray({ length })`       | merges into each element's defaults, per index | keeps that index's default       | wins                  |
-| Plain array of factories    | merges into each element's defaults, per index | keeps that index's default       | wins                  |
-| Plain array of values       | replaces per index                             | keeps that index's default       | wins                  |
+| Generator value             | Plain override                                 | Override array length |
+| --------------------------- | ---------------------------------------------- | --------------------- |
+| Primitive, `Date`, function | replaces it                                    | not applicable        |
+| Nested factory              | merges into the factory's defaults             | not applicable        |
+| `asArray({ length })`       | merges into each element's defaults, per index | wins                  |
+| Plain array of factories    | merges into each element's defaults, per index | wins                  |
+| Plain array of values       | replaces per index                             | wins                  |
 
 Two consequences are worth knowing before you rely on them.
 
@@ -168,17 +168,28 @@ overriding a map-like nested factory with different keys yields the union of bot
 rather than a few different fields, compose a different factory instead of overriding. See
 [Composing factories](#composing-factories).
 
-**`undefined` means different things for a primitive and for a nested factory.** On a primitive it sets the property to
-`undefined` and keeps the key. On a nested factory, and on any array element, it means "leave this at its default", which
-is what makes `[ undefined, { name: 'Jane' } ]` a useful way to override only the second element.
-
-An override array's length always wins, so an explicit `[]` empties the property:
+**An explicit `undefined` always sets the property to `undefined`**, whatever kind of value the generator put there, and
+keeps the key. Leaving the property out of the overrides is what asks for the default:
 
 ```ts
 const busFactory = createFactory<Bus>(() => ({
     passengers: personFactory.asArray({ length: 2 })
 }));
 
+busFactory.build({ passengers: undefined }); // { passengers: undefined }
+busFactory.build({}); // two passengers, from the defaults
+```
+
+Overrides accept `undefined` for every property, including properties whose type does not include it, so this is also a
+way to build a value the declared type does not allow. That is useful for a test that wants exactly that, but nothing
+checks it for you.
+
+Inside an override _array_, `undefined` at an index keeps that element's default instead, which is what makes
+`[ undefined, { name: 'Jane' } ]` a way to override only the second element.
+
+An override array's length always wins, so an explicit `[]` empties the property:
+
+```ts
 busFactory.build({ passengers: [] }); // no passengers
 busFactory.build({ passengers: [ { age: 20 } ] }); // exactly one passenger
 ```

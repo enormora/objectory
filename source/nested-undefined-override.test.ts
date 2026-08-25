@@ -169,3 +169,52 @@ test('build() returns the same result when the same overrides are reused', funct
 
     assert.deepStrictEqual(second, first);
 });
+
+type OptionalAddress = {
+    readonly address: Address | undefined;
+};
+
+type OptionalCrew = {
+    readonly crew: readonly Person[] | undefined;
+};
+
+type OptionalTags = {
+    readonly tags: readonly string[] | undefined;
+};
+
+test('build() sets a nested factory property to undefined when the override is undefined', function () {
+    const factory = createFactory<OptionalAddress>(function () {
+        return {
+            address: createFactory<Address>(function () {
+                return { street: 'Main St 1', city: 'Berlin' };
+            })
+        };
+    });
+
+    const actual = factory.build({ address: undefined });
+
+    assert.deepStrictEqual(actual, { address: undefined });
+});
+
+test('build() sets an array factory property to undefined when the override is undefined', function () {
+    const personFactory = createFactory<Person>(function () {
+        return { name: 'John Doe', age: 42 };
+    });
+    const factory = createFactory<OptionalCrew>(function () {
+        return { crew: personFactory.asArray({ length: 2 }) };
+    });
+
+    const actual = factory.build({ crew: undefined });
+
+    assert.deepStrictEqual(actual, { crew: undefined });
+});
+
+test('build() sets a plain array property to undefined when the override is undefined', function () {
+    const factory = createFactory<OptionalTags>(function () {
+        return { tags: [ 'first', 'second' ] };
+    });
+
+    const actual = factory.build({ tags: undefined });
+
+    assert.deepStrictEqual(actual, { tags: undefined });
+});

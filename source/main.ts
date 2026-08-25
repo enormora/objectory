@@ -279,9 +279,15 @@ function withMaterializedOverride(
     override: NormalizedOverride,
     materialize: (overrideValue: unknown) => AllowedObjectShapeValues
 ): AllowedObjectShapeValues {
-    const resolvedOverride = override.applied ? override.value : undefined;
+    if (!override.applied) {
+        return materialize(undefined);
+    }
 
-    return materialize(resolvedOverride);
+    if (override.value === undefined) {
+        return undefined;
+    }
+
+    return materialize(override.value);
 }
 
 function materializeFactoryWithOverride(
