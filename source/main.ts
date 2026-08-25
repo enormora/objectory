@@ -220,9 +220,9 @@ function materializeArrayFactoryValue(
     override: unknown
 ): AllowedObjectShapeValues {
     const overrideArray: readonly unknown[] | undefined = Array.isArray(override) ? override : undefined;
-    const maxLength = Math.max(arrayFactory.length, overrideArray?.length ?? 0);
+    const length = overrideArray?.length ?? arrayFactory.length;
 
-    return Array.from({ length: maxLength }, function (_unused, index) {
+    return Array.from({ length }, function (_unused, index) {
         const itemOverride = overrideArray?.[index];
 
         if (!isOverridesForFactory(arrayFactory.factory, itemOverride)) {
