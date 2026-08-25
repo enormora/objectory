@@ -63,6 +63,9 @@ Build an array of identical instances by repeatedly calling `build`.
 const passengers = personFactory.buildList({ length: 3 });
 ```
 
+`buildList` returns built objects, not factories, so its result cannot be used as an array property inside a generator. Use
+`asArray` or a plain array of factories there.
+
 ### `factory.asArray({ length })`
 
 Expose the factory as an array factory so it can be embedded in other factories.
@@ -78,6 +81,21 @@ const busFactory = createFactory<Bus>(() => ({
 
 const bus = busFactory.build();
 ```
+
+Every element comes from the same factory, so every element is identical. When the elements should differ, use a plain array
+of factories instead. Its length is the number of elements:
+
+```ts
+const busFactory = createFactory<Bus>(() => ({
+    passengers: [
+        personFactory.withOverrides({ name: 'Jane' }),
+        personFactory.withOverrides({ name: 'Chris' })
+    ]
+}));
+```
+
+Array elements must be factories. A plain array of already built objects is rejected, for the same reason a nested object
+must be a factory rather than a plain literal.
 
 ### `factory.withOverrides(overrides)`
 
@@ -104,6 +122,9 @@ const employeeFactory = personFactory.extend<Employee>(() => ({
 const employee = employeeFactory.build();
 ```
 
+All three `buildInvalid*` methods throw when `path` does not resolve against the built object, rather than returning it
+unchanged. A typo would otherwise leave the assertion testing nothing.
+
 ### `factory.buildInvalidWithout(path)`
 
 Build an object with the property at `path` removed, useful for negative tests.
@@ -127,6 +148,44 @@ Build an object with an additional property added at `path`, useful for testing 
 ```ts
 const withExtra = personFactory.buildInvalidWithAdditional('nickname', 'Jay');
 ```
+
+## Override semantics
+
+What an override does depends on the kind of value the generator put in that property.
+
+| Generator value             | Plain override                                 | `undefined` override             | Override array length |
+| --------------------------- | ---------------------------------------------- | -------------------------------- | --------------------- |
+| Primitive, `Date`, function | replaces it                                    | sets the property to `undefined` | not applicable        |
+| Nested factory              | merges into the factory's defaults             | keeps the default                | not applicable        |
+| `asArray({ length })`       | merges into each element's defaults, per index | keeps that index's default       | wins                  |
+| Plain array of factories    | merges into each element's defaults, per index | keeps that index's default       | wins                  |
+| Plain array of values       | replaces per index                             | keeps that index's default       | wins                  |
+
+Two consequences are worth knowing before you rely on them.
+
+**A merge can add keys, but it can never remove them.** Overriding a nested factory with `{}` changes nothing, and
+overriding a map-like nested factory with different keys yields the union of both. When you need different nested data
+rather than a few different fields, compose a different factory instead of overriding. See
+[Composing factories](#composing-factories).
+
+**`undefined` means different things for a primitive and for a nested factory.** On a primitive it sets the property to
+`undefined` and keeps the key. On a nested factory, and on any array element, it means "leave this at its default", which
+is what makes `[ undefined, { name: 'Jane' } ]` a useful way to override only the second element.
+
+An override array's length always wins, so an explicit `[]` empties the property:
+
+```ts
+const busFactory = createFactory<Bus>(() => ({
+    passengers: personFactory.asArray({ length: 2 })
+}));
+
+busFactory.build({ passengers: [] }); // no passengers
+busFactory.build({ passengers: [ { age: 20 } ] }); // exactly one passenger
+```
+
+Earlier versions took the longer of the two lengths, so an explicit `[]` was a no-op and a test meaning to assert
+something about an empty list quietly asserted it about a two-element list. If you relied on a short override array being
+padded out with defaults, list the elements you want explicitly.
 
 ## Recipes
 
@@ -163,6 +222,49 @@ const trip = tripFactory.build({
     driver: { name: 'Alex' },
     passengers: [ { age: 40 } ]
 });
+```
+
+### Composing factories
+
+Prefer a factory that carries the minimum needed to satisfy its type, then build the fuller cases on top of it with
+`extend`. Overrides then only have to express what a single test cares about.
+
+```ts
+type Product = {
+    name: string;
+    description: string;
+};
+
+const productFactory = createFactory<Product>(() => ({
+    name: 'Widget',
+    description: ''
+}));
+
+const describedProductFactory = productFactory.extend<Product>(() => ({
+    description: 'A very good widget'
+}));
+```
+
+This is also the answer whenever a merge cannot express what you need, because a merge never removes keys. `extend` can
+replace a nested factory outright, which an override cannot:
+
+```ts
+type Translations = Readonly<Record<string, string>>;
+type Listing = { title: Translations; };
+
+const titleFactory = createFactory<Translations>(() => ({ 'de-DE': 'Titel' }));
+const untranslatedTitleFactory = createFactory<Translations>(() => ({}));
+
+const listingFactory = createFactory<Listing>(() => ({ title: titleFactory }));
+
+// merging cannot get rid of the 'de-DE' key
+listingFactory.build({ title: {} }); // { title: { 'de-DE': 'Titel' } }
+
+// composing a different factory can
+const untranslatedListingFactory = listingFactory.extend<Listing>(() => ({
+    title: untranslatedTitleFactory
+}));
+untranslatedListingFactory.build(); // { title: {} }
 ```
 
 ### Discriminated unions
@@ -211,6 +313,69 @@ const postRequestFactory = commonRequestFactory.extend<PostRequest>(() => ({
     body: '{}'
 }));
 ```
+
+#### A union-typed property
+
+When the union sits in a _property_ rather than at the root, the nested factory has to pick one variant as its default.
+Overriding that property merges, and a merge never removes keys, so switching to another variant leaves the fields of the
+first one behind:
+
+```ts
+type NoData =
+    | { notifyNoData: false; }
+    | { notifyNoData: true; timeframeMinutes: number; };
+
+type Monitor = { name: string; noData: NoData; };
+
+const notifyingFactory = createFactory<Extract<NoData, { notifyNoData: true; }>>(() => ({
+    notifyNoData: true,
+    timeframeMinutes: 5
+}));
+
+const monitorFactory = createFactory<Monitor>(() => ({
+    name: 'monitor',
+    noData: notifyingFactory
+}));
+
+monitorFactory.build({ noData: { notifyNoData: false } });
+// { name: 'monitor', noData: { notifyNoData: false, timeframeMinutes: 5 } }
+//                            ^ timeframeMinutes survived, and this is not a NoData
+```
+
+Compose a factory per variant instead of overriding across variants:
+
+```ts
+const silentFactory = createFactory<Extract<NoData, { notifyNoData: false; }>>(() => ({
+    notifyNoData: false
+}));
+
+const silentMonitorFactory = monitorFactory.extend<Monitor>(() => ({ noData: silentFactory }));
+
+silentMonitorFactory.build();
+// { name: 'monitor', noData: { notifyNoData: false } }
+```
+
+Overriding _within_ the variant the factory already builds is fine, because no keys need removing:
+
+```ts
+monitorFactory.build({ noData: { timeframeMinutes: 30 } });
+// { name: 'monitor', noData: { notifyNoData: true, timeframeMinutes: 30 } }
+```
+
+## Troubleshooting
+
+**`is missing the following properties from type 'ObjectoryFactory<...>': build, asArray, withOverrides, extend`**
+
+A generator returned a plain object where a nested factory belongs. Every nested object is a factory, so wrap it:
+
+```ts
+createFactory<Car>(() => ({ driver: { name: 'Jane', age: 32 } })); // rejected
+createFactory<Car>(() => ({ driver: personFactory })); // accepted
+```
+
+The same message with `Type 'Person' is missing ...` inside a `readonly ObjectoryFactory<...>[]` means an array property
+was given already built objects rather than factories. `buildList` produces built objects, so use `asArray` or a plain
+array of factories.
 
 ## Prior art
 
