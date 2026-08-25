@@ -102,6 +102,13 @@ export type AllowedObjectShapeValues =
     | BaseTypes
     | readonly AllowedObjectShapeValues[]
     | { readonly [key: string]: AllowedObjectShapeValues; };
+
+type ObjectShapeValueOf<Value> = Value extends BaseTypes ? Value : ObjectShapeOf<Value>;
+
+export type ObjectShapeOf<Shape> = Shape extends BaseTypes ? never : {
+    [Key in keyof Shape]: ObjectShapeValueOf<Shape[Key]>;
+};
+
 export type AllowedGeneratorReturnShape =
     | ArrayFactoryValue<Record<string, AllowedObjectShapeValues>>
     | BaseTypes
@@ -539,6 +546,12 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
     return factory;
 }
 
+export function createFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>>(
+    generatorFunction: GeneratorFunction<ObjectShape>
+): ObjectoryFactory<ObjectShape>;
+export function createFactory<ObjectShape>(
+    generatorFunction: GeneratorFunction<ObjectShapeOf<ObjectShape>>
+): ObjectoryFactory<ObjectShapeOf<ObjectShape>>;
 export function createFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>>(
     generatorFunction: GeneratorFunction<ObjectShape>
 ): ObjectoryFactory<ObjectShape> {
