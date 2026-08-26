@@ -8,23 +8,9 @@ import {
     normalizeOverride,
     type NormalizedOverride
 } from './override-wrapper.ts';
-import {
-    emptyOverrides,
-    type FactoryOverride,
-    type GeneratedShapeOrRejection,
-    type IsUnion
-} from './union-overrides.ts';
-import {
-    createVariantSelector,
-    type CoveredShape,
-    type DefaultVariantShape,
-    type VariantList
-} from './union-variants.ts';
-import {
-    assertAllowedObjectShapeValue,
-    assertObjectValueComesFromFactory,
-    isAllowedObjectShapeValue
-} from './object-shape-values.ts';
+
+import { createVariantSelector } from './union-variants.ts';
+import { assertAllowedObjectShapeValue, assertObjectValueComesFromFactory } from './object-shape-values.ts';
 import { deepFreeze } from './deep-freeze.ts';
 import {
     assertOverrideMatchesArrayProperty,
@@ -34,11 +20,68 @@ import {
     rootPath,
     type ValuePath
 } from './override-values.ts';
-import { isRecord } from './record.ts';
+import { arrayFactorySymbol, buildAtPathSymbol, factorySymbol } from './factory-symbols.ts';
+import {
+    assertOverrideContainsNoFactories,
+    isAllowedOverrideValue,
+    isArrayFactoryValue,
+    isFactory
+} from './factory-guards.ts';
 
-const arrayFactorySymbol: unique symbol = Symbol('objectory.arrayFactory');
-const factorySymbol: unique symbol = Symbol('objectory.factory');
-const buildAtPathSymbol: unique symbol = Symbol('objectory.buildAtPath');
+type AnyOverridableShape = Readonly<Record<string, AllowedObjectShapeValues>>;
+
+type AllKeys<Union> = Union extends unknown ? keyof Union : never;
+
+type Forbid<Keys extends PropertyKey> = Readonly<Partial<Record<Keys, never>>>;
+
+type UnionToIntersection<Union> = (Union extends unknown ? (argument: Union) => void : never) extends
+    (argument: infer Intersection) => void ? Intersection : never;
+
+type IsUnion<Candidate, Copy = Candidate> = Candidate extends unknown ? ([Copy] extends [Candidate] ? false : true)
+    : never;
+
+type OverridesForShape<Shape> = Shape extends AnyOverridableShape ? Overrides<ShapeToGeneratorReturnValue<Shape>>
+    : never;
+
+type DiscriminatingKeys<Default, Target> = {
+    [Key in keyof Target]-?: Key extends keyof Default ? (Default[Key] extends Target[Key] ? never : Key) : never;
+}[keyof Target];
+
+type KeysToOverride<Default, Target> = Exclude<keyof Target, DiscriminatingKeys<Default, Target>>;
+
+type VariantBranch<Union, Default, Target> =
+    & Forbid<Exclude<AllKeys<Union>, keyof Target>>
+    & OverridesForShape<Pick<Target, KeysToOverride<Default, Target>>>
+    & Pick<Target, DiscriminatingKeys<Default, Target> & keyof Target>;
+
+type SharedBranch<Union> =
+    & Forbid<Exclude<AllKeys<Union>, keyof Union>>
+    & UnionToIntersection<Union extends unknown ? OverridesForShape<Pick<Union, keyof Union>> : never>;
+
+type VariantBranches<Union, Default, Members> = Members extends unknown ? VariantBranch<Union, Default, Members>
+    : never;
+
+type UnionOverride<Union, Default> = SharedBranch<Union> | VariantBranches<Union, Default, Union>;
+
+type FactoryOverride<ObjectShape, Default> = true extends IsUnion<ObjectShape> ? UnionOverride<ObjectShape, Default>
+    : Overrides<ShapeToGeneratorReturnValue<Extract<ObjectShape, AnyOverridableShape>>>;
+
+function emptyOverrides<ObjectShape extends AnyOverridableShape, DefaultShape extends ObjectShape>(): FactoryOverride<
+    ObjectShape,
+    DefaultShape
+> {
+    const noOverrides: unknown = {};
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- an empty override fits every branch
+    return noOverrides as FactoryOverride<ObjectShape, DefaultShape>;
+}
+
+type UseCreateUnionFactory = 'objectory: this shape is a union of object types, use createUnionFactory() instead';
+
+type GeneratedShapeOrRejection<ObjectShape extends AnyOverridableShape> = true extends IsUnion<ObjectShape>
+    ? UseCreateUnionFactory
+    : ShapeToGeneratorReturnValue<ObjectShape>;
+
 export type ArrayFactoryValue<
     ObjectShape extends Record<string, AllowedObjectShapeValues>,
     Length extends number = number
@@ -188,76 +231,25 @@ export type AllowedGeneratorReturnShape =
     | ObjectoryFactory<Record<string, AllowedObjectShapeValues>>
     | readonly AllowedGeneratorReturnShape[];
 
-function isFactory<T extends Record<string, AllowedObjectShapeValues>>(value: unknown): value is ObjectoryFactory<T> {
-    return isRecord(value) && value[factorySymbol] === true;
+function toNestedOverride(override: unknown): FactoryOverride<AnyOverridableShape, AnyOverridableShape> {
+    return (override ?? {}) as FactoryOverride<AnyOverridableShape, AnyOverridableShape>;
 }
 
-function isArrayFactoryValue(value: unknown): value is MaterializableArrayFactory {
-    if (!isRecord(value)) {
-        return false;
-    }
-
-    if (value[arrayFactorySymbol] !== true) {
-        return false;
-    }
-
-    return isFactory(value.factory) && typeof value.length === 'number';
+function toNestedFactory(value: unknown): ObjectoryFactory<AnyOverridableShape> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- isFactory checked the marker
+    return value as ObjectoryFactory<AnyOverridableShape>;
 }
 
-function assertOverrideValueIsNotAFactory(value: unknown, path: string): void {
-    if (isFactory(value) || isArrayFactoryValue(value)) {
-        throw new TypeError(
-            `Invalid override at "${path}": factories cannot be used as override values, use build() or buildList()`
-        );
-    }
-}
-
-function assertOverrideContainsNoFactories(value: unknown, path: string): unknown {
-    assertOverrideValueIsNotAFactory(value, path);
-
-    if (Array.isArray(value)) {
-        for (const [ index, item ] of value.entries()) {
-            assertOverrideContainsNoFactories(item, `${path}.${index}`);
-        }
-    }
-
-    if (isRecord(value)) {
-        for (const [ key, child ] of Object.entries(value)) {
-            assertOverrideContainsNoFactories(child, `${path}.${key}`);
-        }
-    }
-
-    return value;
-}
-
-function isAllowedOverrideValue(value: unknown): boolean {
-    if (value === undefined) {
-        return true;
-    }
-
-    if (Array.isArray(value)) {
-        return value.every(isAllowedOverrideValue);
-    }
-
-    if (isRecord(value)) {
-        return Object.values(value).every(isAllowedOverrideValue);
-    }
-
-    return isAllowedObjectShapeValue(value);
-}
-
-function isOverridesForFactory<F extends ObjectoryFactory<Record<string, AllowedObjectShapeValues>>>(
-    _factory: F,
-    override: unknown
-): override is Parameters<F['build']>[0] {
-    return override === undefined || isAllowedOverrideValue(override);
+function toArrayFactory(value: unknown): MaterializableArrayFactory {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- isArrayFactoryValue checked the marker
+    return value as MaterializableArrayFactory;
 }
 
 function materializeArrayFactoryValue(
     arrayFactory: MaterializableArrayFactory,
     override: unknown,
     path: ValuePath
-): AllowedObjectShapeValues {
+): unknown {
     const overrideArray: readonly unknown[] | undefined = Array.isArray(override) ? override : undefined;
     const length = overrideArray?.length ?? arrayFactory.length;
 
@@ -269,15 +261,10 @@ function materializeArrayFactoryValue(
             assertOverrideMatchesNestedFactory(itemOverride, itemPath);
         }
 
-        if (!isOverridesForFactory(arrayFactory.factory, itemOverride)) {
+        if (!isAllowedOverrideValue(itemOverride)) {
             throw new TypeError('Invalid override value provided for array factory item');
         }
-
-        if (itemOverride === undefined) {
-            return arrayFactory.factory[buildAtPathSymbol]({}, itemPath);
-        }
-
-        return arrayFactory.factory[buildAtPathSymbol](itemOverride, itemPath);
+        return arrayFactory.factory[buildAtPathSymbol](toNestedOverride(itemOverride), itemPath);
     });
 }
 
@@ -285,13 +272,9 @@ function buildFactoryValue(
     factory: ObjectoryFactory<Record<string, AllowedObjectShapeValues>>,
     override: unknown,
     pathPrefix: string
-): AllowedObjectShapeValues {
-    if (isOverridesForFactory(factory, override)) {
-        if (override === undefined) {
-            return factory[buildAtPathSymbol]({}, pathPrefix);
-        }
-
-        return factory[buildAtPathSymbol](override, pathPrefix);
+): unknown {
+    if (isAllowedOverrideValue(override)) {
+        return factory[buildAtPathSymbol](toNestedOverride(override), pathPrefix);
     }
 
     throw new TypeError('Invalid override value provided for nested factory');
@@ -301,14 +284,14 @@ type TemplateItemResolver = (
     value: unknown,
     overrideValue: unknown,
     path: ValuePath
-) => AllowedObjectShapeValues;
+) => unknown;
 
 function materializeTemplateArray(
     template: readonly unknown[],
     override: unknown,
     resolve: TemplateItemResolver,
     path: ValuePath
-): AllowedObjectShapeValues {
+): unknown {
     if (Array.isArray(override)) {
         return override.map(function (item, index) {
             const templateItem = template[index];
@@ -328,8 +311,8 @@ function materializeTemplateArray(
 
 function withMaterializedOverride(
     override: NormalizedOverride,
-    materialize: (overrideValue: unknown) => AllowedObjectShapeValues
-): AllowedObjectShapeValues {
+    materialize: (overrideValue: unknown) => unknown
+): unknown {
     if (!override.applied) {
         return materialize(undefined);
     }
@@ -345,7 +328,7 @@ function materializeFactoryWithOverride(
     value: ObjectoryFactory<Record<string, AllowedObjectShapeValues>>,
     override: NormalizedOverride,
     path: ValuePath
-): AllowedObjectShapeValues {
+): unknown {
     return withMaterializedOverride(override, function (resolved) {
         if (resolved !== undefined) {
             assertOverrideMatchesNestedFactory(resolved, path.fromRoot);
@@ -359,7 +342,7 @@ function materializeArrayFactoryWithOverride(
     value: MaterializableArrayFactory,
     override: NormalizedOverride,
     path: ValuePath
-): AllowedObjectShapeValues {
+): unknown {
     return withMaterializedOverride(override, function (resolved) {
         if (resolved !== undefined) {
             assertOverrideMatchesArrayProperty(resolved, path.fromRoot);
@@ -374,7 +357,7 @@ function materializeTemplateWithOverride(
     override: NormalizedOverride,
     resolve: TemplateItemResolver,
     path: ValuePath
-): AllowedObjectShapeValues {
+): unknown {
     return withMaterializedOverride(override, function (resolved) {
         if (resolved !== undefined) {
             assertOverrideMatchesArrayProperty(resolved, path.fromRoot);
@@ -387,7 +370,7 @@ function materializeTemplateWithOverride(
 function materializeLeafValue(
     value: unknown,
     override: NormalizedOverride
-): AllowedObjectShapeValues {
+): unknown {
     if (override.applied) {
         return assertAllowedObjectShapeValue(override.value);
     }
@@ -399,15 +382,15 @@ function materializeValue(
     value: unknown,
     override: unknown,
     path: ValuePath
-): AllowedObjectShapeValues {
+): unknown {
     const normalizedOverride = normalizeOverride(override);
 
     if (isFactory(value)) {
-        return materializeFactoryWithOverride(value, normalizedOverride, path);
+        return materializeFactoryWithOverride(toNestedFactory(value), normalizedOverride, path);
     }
 
     if (isArrayFactoryValue(value)) {
-        return materializeArrayFactoryWithOverride(value, normalizedOverride, path);
+        return materializeArrayFactoryWithOverride(toArrayFactory(value), normalizedOverride, path);
     }
 
     if (Array.isArray(value)) {
@@ -585,6 +568,16 @@ export function createFactory<ObjectShape extends Record<string, AllowedObjectSh
         }
     );
 }
+
+type AnyObjectoryFactory = ObjectoryFactory<Readonly<Record<string, AllowedObjectShapeValues>>>;
+
+export type VariantList = readonly [AnyObjectoryFactory, ...AnyObjectoryFactory[]];
+
+type ShapeBuiltBy<Variant> = Variant extends ObjectoryFactory<infer Shape> ? Shape : never;
+
+export type CoveredShape<Variants extends VariantList> = ShapeBuiltBy<Variants[number]>;
+
+export type DefaultVariantShape<Variants extends VariantList> = ShapeBuiltBy<Variants[0]>;
 
 export function createUnionFactory<const Variants extends VariantList>(
     variants: Variants

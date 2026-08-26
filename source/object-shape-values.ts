@@ -1,4 +1,3 @@
-import type { AllowedObjectShapeValues } from './main.ts';
 import { isRecord } from './record.ts';
 
 const primitiveAllowedTypes = new Set([ 'string', 'number', 'boolean', 'bigint', 'symbol', 'function' ]);
@@ -15,7 +14,7 @@ export function isPrimitiveAllowedObjectShapeValue(value: unknown): boolean {
     return primitiveAllowedTypes.has(typeof value);
 }
 
-export function isAllowedObjectShapeValue(value: unknown): value is AllowedObjectShapeValues {
+export function isAllowedObjectShapeValue(value: unknown): boolean {
     if (isPrimitiveAllowedObjectShapeValue(value)) {
         return true;
     }
@@ -31,7 +30,7 @@ export function isAllowedObjectShapeValue(value: unknown): value is AllowedObjec
     return false;
 }
 
-export function assertAllowedObjectShapeValue(value: unknown): AllowedObjectShapeValues {
+export function assertAllowedObjectShapeValue(value: unknown): unknown {
     if (!isAllowedObjectShapeValue(value)) {
         throw new TypeError('Invalid value provided for objectory factory');
     }

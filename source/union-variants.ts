@@ -1,15 +1,3 @@
-import type { AllowedObjectShapeValues, ObjectoryFactory } from './main.ts';
-
-type AnyObjectoryFactory = ObjectoryFactory<Readonly<Record<string, AllowedObjectShapeValues>>>;
-
-export type VariantList = readonly [AnyObjectoryFactory, ...AnyObjectoryFactory[]];
-
-type ShapeBuiltBy<Variant> = Variant extends ObjectoryFactory<infer Shape> ? Shape : never;
-
-export type CoveredShape<Variants extends VariantList> = ShapeBuiltBy<Variants[number]>;
-
-export type DefaultVariantShape<Variants extends VariantList> = ShapeBuiltBy<Variants[0]>;
-
 type VariantDefaults = Readonly<Record<string, unknown>>;
 
 const noVariantMatched =
