@@ -1,6 +1,7 @@
 /* eslint-disable @stylistic/operator-linebreak, @stylistic/indent -- conflicts with dprint */
 import { addValueAtPath, normalizePath, removePropertyAtPath, setValueAtPath } from './path-operations.ts';
 import type { ElementsForOptions, LengthForOptions } from './array-lengths.ts';
+import { deepFreeze } from './deep-freeze.ts';
 import { assertOverrideMatchesArrayProperty, assertOverrideMatchesNestedFactory } from './override-values.ts';
 import { isRecord } from './record.ts';
 
@@ -14,6 +15,12 @@ const primitiveAllowedTypes = new Set([ 'string', 'number', 'boolean', 'bigint',
 export type ArrayFactoryOptions = {
     readonly length?: number;
 };
+
+export type BuildOptions = {
+    readonly freeze?: boolean;
+};
+
+export type BuildListOptions = ArrayFactoryOptions & BuildOptions;
 
 export type ArrayFactoryValue<
     ObjectShape extends Record<string, AllowedObjectShapeValues>,
@@ -48,7 +55,10 @@ export type OverridesHelper<T> = T extends ObjectoryFactory<infer U> ? Overrides
     : T;
 
 export type ObjectoryFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>> = {
-    readonly build: (overrides?: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>) => ObjectShape;
+    readonly build: (
+        overrides?: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>,
+        options?: BuildOptions
+    ) => ObjectShape;
     readonly asArray: <const Options extends ArrayFactoryOptions = Readonly<Record<string, never>>>(
         options?: Options
     ) => ArrayFactoryValue<ObjectShape, LengthForOptions<Options>>;
@@ -58,7 +68,7 @@ export type ObjectoryFactory<ObjectShape extends Record<string, AllowedObjectSha
     readonly extend: <ExtendedObjectShape extends ObjectShape>(
         extensionGenerator: () => ShapeToGeneratorReturnValue<ExtensionShape<ObjectShape, ExtendedObjectShape>>
     ) => ObjectoryFactory<ExtendedObjectShape>;
-    readonly buildList: <const Options extends ArrayFactoryOptions = Readonly<Record<string, never>>>(
+    readonly buildList: <const Options extends BuildListOptions = Readonly<Record<string, never>>>(
         options?: Options
     ) => ElementsForOptions<ObjectShape, Options>;
     readonly buildInvalidWithout: (path: string) => unknown;
@@ -522,8 +532,10 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
     defaultOverrides: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>
 ): ObjectoryFactory<ObjectShape> {
     const factory: ObjectoryFactory<ObjectShape> = {
-        build(overrides = {}) {
-            return factory[buildAtPathSymbol](overrides, '');
+        build(overrides, options) {
+            const built = factory[buildAtPathSymbol](overrides ?? {}, '');
+
+            return options?.freeze === true ? deepFreeze(built) : built;
         },
         [buildAtPathSymbol](overrides, pathPrefix) {
             const generatedObject = generatorFunction();
@@ -561,14 +573,16 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
 
             return instantiateFactory(extendedGeneratorFunction, extendedDefaultOverrides);
         },
-        buildList<const Options extends ArrayFactoryOptions = Readonly<Record<string, never>>>(options?: Options) {
+        buildList<const Options extends BuildListOptions = Readonly<Record<string, never>>>(options?: Options) {
             const length = options?.length ?? 0;
+            const shouldFreeze = options?.freeze === true;
             const elements = Array.from({ length }, function () {
-                return factory.build();
+                return factory.build({}, { freeze: shouldFreeze });
             });
+            const list = shouldFreeze ? deepFreeze(elements) : elements;
 
             // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the tuple length is the options literal
-            return elements as ElementsForOptions<ObjectShape, Options>;
+            return list as ElementsForOptions<ObjectShape, Options>;
         },
         buildInvalidWithout(path) {
             const pathSegments = normalizePath(path);
