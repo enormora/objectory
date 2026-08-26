@@ -179,7 +179,9 @@ const employeeFactory = personFactory.extend<Employee>(() => ({
 const employee = employeeFactory.build();
 ```
 
-`extend` needs the new type spelled out, because it is the whole point of the call.
+`extend` needs the new type spelled out, because it is the whole point of the call. Naming the type the factory already
+builds is rejected, because then only values change, which is what [`withOverrides`](#factorywithoverridesoverrides) is
+for.
 
 ### `withOverrides` or `extend`?
 
@@ -500,6 +502,12 @@ array of factories.
 
 `createFactory` was given a union of object shapes. Write one factory per variant and combine them with
 [`createUnionFactory`](#createunionfactoryvariants).
+
+**`not assignable to parameter of type '() => "objectory: this is the shape the factory already builds, use withOverrides() instead"'`**
+
+`extend` was given the type the base factory already builds, or no type argument at all, so the derived factory would
+build the very same shape. Name a type that adds fields, or change values with
+[`withOverrides`](#factorywithoverridesoverrides).
 
 **`Type '3' is not assignable to type '2'` on an `ArrayFactoryValue`**
 
