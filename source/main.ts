@@ -105,6 +105,14 @@ export type ExtensionShape<
     ExtendedShape extends BaseShape
 > = Partial<Pick<ExtendedShape, keyof BaseShape>> & Pick<ExtendedShape, Exclude<keyof ExtendedShape, keyof BaseShape>>;
 
+type UseWithOverrides = 'objectory: this is the shape the factory already builds, use withOverrides() instead';
+
+type ExtensionOrRejection<
+    BaseShape extends Record<string, AllowedObjectShapeValues>,
+    ExtendedShape extends BaseShape
+> = [BaseShape] extends [ExtendedShape] ? UseWithOverrides
+    : ShapeToGeneratorReturnValue<ExtensionShape<BaseShape, ExtendedShape>>;
+
 export type Overrides<ObjectShape> = {
     readonly [P in keyof ObjectShape]?: OverridesHelper<ObjectShape[P]>;
 };
@@ -134,7 +142,7 @@ export type ObjectoryFactory<
         overrides: FactoryOverride<ObjectShape, DefaultShape>
     ) => ObjectoryFactory<ObjectShape, DefaultShape>;
     readonly extend: <ExtendedObjectShape extends ObjectShape>(
-        extensionGenerator: () => ShapeToGeneratorReturnValue<ExtensionShape<ObjectShape, ExtendedObjectShape>>
+        extensionGenerator: () => ExtensionOrRejection<ObjectShape, ExtendedObjectShape>
     ) => ObjectoryFactory<ExtendedObjectShape>;
     readonly buildList: <const Options extends BuildListOptions = Readonly<Record<string, never>>>(
         options?: Options
@@ -243,6 +251,11 @@ function toNestedFactory(value: unknown): ObjectoryFactory<AnyOverridableShape> 
 function toArrayFactory(value: unknown): MaterializableArrayFactory {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- isArrayFactoryValue checked the marker
     return value as MaterializableArrayFactory;
+}
+
+function toExtensionValues(extensionGenerated: unknown): Readonly<Record<string, unknown>> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the rejected extension is a type-level marker only
+    return extensionGenerated as Readonly<Record<string, unknown>>;
 }
 
 function materializeArrayFactoryValue(
@@ -494,11 +507,11 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
             return instantiateFactory(generatorFunction, merged, materializeShape);
         },
         extend<ExtendedObjectShape extends ObjectShape>(
-            extensionGenerator: () => ShapeToGeneratorReturnValue<ExtensionShape<ObjectShape, ExtendedObjectShape>>
+            extensionGenerator: () => ExtensionOrRejection<ObjectShape, ExtendedObjectShape>
         ) {
             const extendedGeneratorFunction = function (): ShapeToGeneratorReturnValue<ExtendedObjectShape> {
                 const baseGenerated = generatorFunction();
-                const extensionGenerated = extensionGenerator();
+                const extensionGenerated = toExtensionValues(extensionGenerator());
                 const mergedGenerated: Readonly<Record<string, unknown>> = {
                     ...baseGenerated,
                     ...extensionGenerated
