@@ -14,14 +14,20 @@ export type ArrayFactoryOptions = {
     readonly length?: number;
 };
 
-export type ArrayFactoryValue<ObjectShape extends Record<string, AllowedObjectShapeValues>> = {
+export type ArrayFactoryValue<
+    ObjectShape extends Record<string, AllowedObjectShapeValues>,
+    Length extends number = number
+> = {
     readonly factory: {
         readonly build: (overrides?: never) => ObjectShape;
         readonly [factorySymbol]: true;
     };
-    readonly length: number;
+    readonly length: Length;
     readonly [arrayFactorySymbol]: true;
 };
+
+type LengthForOptions<Options extends ArrayFactoryOptions> = Options extends
+    { readonly length: infer Length extends number; } ? Length : 0;
 
 type MaterializableArrayFactory = {
     readonly factory: ObjectoryFactory<Readonly<Record<string, AllowedObjectShapeValues>>>;
@@ -45,7 +51,9 @@ export type OverridesHelper<T> = T extends ObjectoryFactory<infer U> ? Overrides
 
 export type ObjectoryFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>> = {
     readonly build: (overrides?: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>) => ObjectShape;
-    readonly asArray: (options?: ArrayFactoryOptions) => ArrayFactoryValue<ObjectShape>;
+    readonly asArray: <const Options extends ArrayFactoryOptions = Readonly<Record<string, never>>>(
+        options?: Options
+    ) => ArrayFactoryValue<ObjectShape, LengthForOptions<Options>>;
     readonly withOverrides: (
         overrides: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>
     ) => ObjectoryFactory<ObjectShape>;
@@ -71,10 +79,17 @@ type TupleToGeneratorReturnValue<TupleShape> = {
     readonly [Index in keyof TupleShape]: ShapeToGeneratorReturnValueHelper<TupleShape[Index]>;
 };
 
+type TupleArrayFactory<TupleShape extends { readonly length: number; }> = TupleShape extends
+    readonly (infer ItemShape)[]
+    ? ([ItemShape] extends [Record<string, AllowedObjectShapeValues>]
+        ? ArrayFactoryValue<Extract<ItemShape, Record<string, AllowedObjectShapeValues>>, TupleShape['length']>
+        : never)
+    : never;
+
 export type ShapeToGeneratorReturnValueHelper<T> = T extends readonly (infer ItemShape)[]
     ? number extends T['length']
         ? ArrayItemToGeneratorReturnValue<ItemShape> | readonly ShapeToGeneratorReturnValueHelper<ItemShape>[]
-    : TupleToGeneratorReturnValue<T>
+    : TupleArrayFactory<T> | TupleToGeneratorReturnValue<T>
     : T extends Record<string, AllowedObjectShapeValues> ? ObjectoryFactory<T>
     : T;
 
@@ -485,13 +500,19 @@ function mergeOverrides<GeneratedObject extends Record<string, AllowedGeneratorR
     return { ...base, ...extension };
 }
 
-function createArrayFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>>(
-    factory: ObjectoryFactory<ObjectShape>,
-    options?: ArrayFactoryOptions
-): ArrayFactoryValue<ObjectShape> {
+function createArrayFactory<
+    ObjectShape extends Record<string, AllowedObjectShapeValues>,
+    Options extends ArrayFactoryOptions
+>(factory: ObjectoryFactory<ObjectShape>, options?: Options): ArrayFactoryValue<
+    ObjectShape,
+    LengthForOptions<Options>
+> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the length is the literal the options carry
+    const length = (options?.length ?? 0) as LengthForOptions<Options>;
+
     return {
         factory,
-        length: options?.length ?? 0,
+        length,
         [arrayFactorySymbol]: true
     };
 }
