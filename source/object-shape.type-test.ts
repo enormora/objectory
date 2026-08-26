@@ -13,6 +13,7 @@ type TupleShape = { readonly pair: readonly ['a', true]; };
 type VariantA = { readonly kind: 'a'; };
 type VariantB = { readonly kind: 'b'; };
 type UnionItemArrayShape = { readonly items: readonly (VariantA | VariantB)[]; };
+type NestedUnionShape = { readonly variant: VariantA | VariantB; };
 type SingleVariantArrayShape = { readonly items: ArrayFactoryValue<VariantA>; };
 type SingleVariantArrayGenerator = () => SingleVariantArrayShape;
 type PersonShape = { readonly name: string; readonly age: number; };
@@ -177,6 +178,28 @@ describe('array element shapes accepted by createFactory()', function () {
         });
         expect(createFactory<CrewShape>).type.not.toBeCallableWith(function () {
             return { crew: [ { name: 'Jane Doe', age: 32 } ] };
+        });
+    });
+});
+
+describe('union shapes accepted by createFactory()', function () {
+    test('accepts a factory typed to the whole union for a union-typed property', function () {
+        const unionFactory = createFactory<VariantA | VariantB>(function () {
+            return { kind: 'a' };
+        });
+
+        expect(createFactory<NestedUnionShape>).type.toBeCallableWith(function () {
+            return { variant: unionFactory };
+        });
+    });
+
+    test('accepts a factory typed to one variant for a union-typed property', function () {
+        const variantAFactory = createFactory<VariantA>(function () {
+            return { kind: 'a' };
+        });
+
+        expect(createFactory<NestedUnionShape>).type.toBeCallableWith(function () {
+            return { variant: variantAFactory };
         });
     });
 });

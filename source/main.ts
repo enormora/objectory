@@ -53,7 +53,7 @@ export type ExtensionShape<
     ExtendedShape extends BaseShape
 > = Partial<Pick<ExtendedShape, keyof BaseShape>> & Pick<ExtendedShape, Exclude<keyof ExtendedShape, keyof BaseShape>>;
 
-export type Overrides<ObjectShape extends Record<string, AllowedGeneratorReturnShape>> = {
+export type Overrides<ObjectShape> = {
     readonly [P in keyof ObjectShape]?: OverridesHelper<ObjectShape[P]>;
 };
 
@@ -104,18 +104,26 @@ type TupleArrayFactory<TupleShape extends { readonly length: number; }> = TupleS
         : never)
     : never;
 
-export type ShapeToGeneratorReturnValueHelper<T> = T extends readonly (infer ItemShape)[]
+type WholeShapeFactory<T> = [T] extends [readonly unknown[]] ? never
+    : [T] extends [Record<string, AllowedObjectShapeValues>] ? ObjectoryFactory<T>
+    : never;
+
+type DistributedShapeToGeneratorReturnValue<T> = T extends readonly (infer ItemShape)[]
     ? number extends T['length']
         ? ArrayItemToGeneratorReturnValue<ItemShape> | readonly ShapeToGeneratorReturnValueHelper<ItemShape>[]
     : TupleArrayFactory<T> | TupleToGeneratorReturnValue<T>
     : T extends Record<string, AllowedObjectShapeValues> ? ObjectoryFactory<T>
     : T;
 
+export type ShapeToGeneratorReturnValueHelper<T> =
+    | DistributedShapeToGeneratorReturnValue<T>
+    | WholeShapeFactory<T>;
+
 export type ShapeToGeneratorReturnValue<T extends Record<string, AllowedObjectShapeValues>> = {
     readonly [P in keyof T]: ShapeToGeneratorReturnValueHelper<T[P]>;
 };
 
-type GeneratedObjectToShape<T extends Record<string, AllowedGeneratorReturnShape>> = {
+type GeneratedObjectToShape<T> = {
     readonly [P in keyof T]: GeneratedObjectToShapeHelper<T[P]>;
 };
 
@@ -279,13 +287,13 @@ function buildFactoryValue(
 }
 
 type TemplateItemResolver = (
-    value: AllowedGeneratorReturnShape,
+    value: unknown,
     overrideValue: unknown,
     path: ValuePath
 ) => AllowedObjectShapeValues;
 
 function materializeTemplateArray(
-    template: readonly AllowedGeneratorReturnShape[],
+    template: readonly unknown[],
     override: unknown,
     resolve: TemplateItemResolver,
     path: ValuePath
@@ -351,7 +359,7 @@ function materializeArrayFactoryWithOverride(
 }
 
 function materializeTemplateWithOverride(
-    value: readonly AllowedGeneratorReturnShape[],
+    value: readonly unknown[],
     override: NormalizedOverride,
     resolve: TemplateItemResolver,
     path: ValuePath
@@ -366,7 +374,7 @@ function materializeTemplateWithOverride(
 }
 
 function materializeLeafValue(
-    value: AllowedGeneratorReturnShape,
+    value: unknown,
     override: NormalizedOverride
 ): AllowedObjectShapeValues {
     if (override.applied) {
@@ -377,7 +385,7 @@ function materializeLeafValue(
 }
 
 function materializeValue(
-    value: AllowedGeneratorReturnShape,
+    value: unknown,
     override: unknown,
     path: ValuePath
 ): AllowedObjectShapeValues {
@@ -400,7 +408,7 @@ function materializeValue(
     return materializeLeafValue(value, normalizedOverride);
 }
 
-function applyOverrides<GeneratedObject extends Record<string, AllowedGeneratorReturnShape>>(
+function applyOverrides<GeneratedObject extends Readonly<Record<string, unknown>>>(
     generatedObject: GeneratedObject,
     overrides: Overrides<GeneratedObject>,
     pathPrefix: string
@@ -432,7 +440,7 @@ function applyOverrides<GeneratedObject extends Record<string, AllowedGeneratorR
     return Object.fromEntries(entries) as GeneratedObjectToShape<GeneratedObject>;
 }
 
-function mergeOverrides<GeneratedObject extends Record<string, AllowedGeneratorReturnShape>>(
+function mergeOverrides<GeneratedObject>(
     base: Overrides<GeneratedObject>,
     extension: Overrides<GeneratedObject>
 ): Overrides<GeneratedObject> {
@@ -500,7 +508,7 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
             const extendedGeneratorFunction = function (): ShapeToGeneratorReturnValue<ExtendedObjectShape> {
                 const baseGenerated = generatorFunction();
                 const extensionGenerated = extensionGenerator();
-                const mergedGenerated: Record<string, AllowedGeneratorReturnShape> = {
+                const mergedGenerated: Readonly<Record<string, unknown>> = {
                     ...baseGenerated,
                     ...extensionGenerated
                 };

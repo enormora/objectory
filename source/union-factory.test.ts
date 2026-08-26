@@ -118,3 +118,37 @@ test('createUnionFactory() supports the freeze option', function () {
 
     assert.strictEqual(Object.isFrozen(article), true);
 });
+
+test('createUnionFactory() works as a nested factory', function () {
+    const blogFactory = createFactory<{ readonly slug: string; readonly article: Draft | Published; }>(function () {
+        return { slug: 'a-blog', article: articleFactory };
+    });
+
+    assert.deepStrictEqual(blogFactory.build({ article: { state: 'published' } }), {
+        slug: 'a-blog',
+        article: { id: 'a-1', title: 'Draft', state: 'published', publishedAt: '2026-01-01' }
+    });
+});
+
+test('createUnionFactory() leaves no stale key behind when nested', function () {
+    const blogFactory = createFactory<{ readonly slug: string; readonly article: Draft | Published; }>(function () {
+        return { slug: 'a-blog', article: articleFactory };
+    });
+
+    const built = blogFactory.build({ article: { state: 'published' } });
+
+    assert.strictEqual(Object.hasOwn(built.article, 'editorNote'), false);
+});
+
+test('createUnionFactory() works as an array factory item', function () {
+    const feedFactory = createFactory<{ readonly articles: readonly (Draft | Published)[]; }>(function () {
+        return { articles: articleFactory.asArray({ length: 2 }) };
+    });
+
+    const built = feedFactory.build({ articles: [ {}, { state: 'published' } ] });
+
+    assert.deepStrictEqual(built.articles, [
+        { id: 'a-1', title: 'Draft', state: 'draft', editorNote: '' },
+        { id: 'a-1', title: 'Draft', state: 'published', publishedAt: '2026-01-01' }
+    ]);
+});
