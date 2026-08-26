@@ -57,7 +57,7 @@ test('removePropertyAtPath() throws when an object key in the path does not exis
 
     assert.throws(function () {
         return removePropertyAtPath(original, [ 'foo', 'baz' ]);
-    }, /Cannot resolve path "baz"/u);
+    }, /Cannot resolve path "foo\.baz"/u);
 });
 
 test('removePropertyAtPath() throws when an array index is out of range', function () {
@@ -66,7 +66,7 @@ test('removePropertyAtPath() throws when an array index is out of range', functi
 
     assert.throws(function () {
         return removePropertyAtPath(original, [ 'items', outOfRangeIndex ]);
-    }, /Cannot resolve path "3"/u);
+    }, /Cannot resolve path "items\.3"/u);
 });
 
 test('removePropertyAtPath() throws when a path segment leads through a primitive', function () {
@@ -74,7 +74,7 @@ test('removePropertyAtPath() throws when a path segment leads through a primitiv
 
     assert.throws(function () {
         return removePropertyAtPath(original, [ 'count', 'deeper' ]);
-    }, /Cannot resolve path "deeper"/u);
+    }, /Cannot resolve path "count\.deeper"/u);
 });
 
 test('setValueAtPath() updates nested object properties immutably', function () {
@@ -120,7 +120,7 @@ test('setValueAtPath() throws when an object key in the path does not exist', fu
 
     assert.throws(function () {
         return setValueAtPath(original, [ 'outer', 'missing' ], 'value');
-    }, /Cannot resolve path "missing"/u);
+    }, /Cannot resolve path "outer\.missing"/u);
 });
 
 test('setValueAtPath() throws instead of creating structure through a primitive', function () {
@@ -128,7 +128,7 @@ test('setValueAtPath() throws instead of creating structure through a primitive'
 
     assert.throws(function () {
         return setValueAtPath(original, [ 'count', 'deeper' ], 'value');
-    }, /Cannot resolve path "deeper"/u);
+    }, /Cannot resolve path "count\.deeper"/u);
 });
 
 test('setValueAtPath() throws when the array index is out of range', function () {
@@ -137,7 +137,7 @@ test('setValueAtPath() throws when the array index is out of range', function ()
 
     assert.throws(function () {
         return setValueAtPath(original, [ 'values', outOfRangeIndex ], 'value');
-    }, /Cannot resolve path "3"/u);
+    }, /Cannot resolve path "values\.3"/u);
 });
 
 test('addValueAtPath() adds a new top-level property immutably', function () {
@@ -197,7 +197,7 @@ test('addValueAtPath() throws when the array index is beyond the end', function 
 
     assert.throws(function () {
         return addValueAtPath(original, [ 'values', outOfRangeIndex ], 1);
-    }, /Cannot resolve path "3"/u);
+    }, /Cannot resolve path "values\.3"/u);
 });
 
 test('addValueAtPath() throws when the target object key already exists', function () {
@@ -205,7 +205,15 @@ test('addValueAtPath() throws when the target object key already exists', functi
 
     assert.throws(function () {
         return addValueAtPath(original, [ 'foo' ], 'other');
-    }, /already exists/u);
+    }, /Cannot add property at path "foo" because it already exists/u);
+});
+
+test('addValueAtPath() names the full path when a nested object key already exists', function () {
+    const original = { outer: { inner: { keep: 'stay' } } } as const;
+
+    assert.throws(function () {
+        return addValueAtPath(original, [ 'outer', 'inner', 'keep' ], 'other');
+    }, /Cannot add property at path "outer\.inner\.keep" because it already exists/u);
 });
 
 test('addValueAtPath() throws when the parent path does not exist', function () {
@@ -213,5 +221,5 @@ test('addValueAtPath() throws when the parent path does not exist', function () 
 
     assert.throws(function () {
         return addValueAtPath(original, [ 'outer', 'missing', 'extra' ], 'new');
-    }, /Cannot resolve path "missing\.extra"/u);
+    }, /Cannot resolve path "outer\.missing\.extra"/u);
 });
