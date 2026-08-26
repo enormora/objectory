@@ -496,7 +496,7 @@ test('build() works with overriding nullish Partial<> object', function () {
     type PartialInnerType = Readonly<Partial<InnerType>>;
     const factory = createFactory<{ readonly bar: PartialInnerType; }>(function () {
         return {
-            bar: createFactory(function () {
+            bar: createFactory<Readonly<Partial<InnerShape>>>(function () {
                 return { foo: 'bar', bar: 'baz' };
             })
         };
@@ -504,9 +504,9 @@ test('build() works with overriding nullish Partial<> object', function () {
 
     const actual = factory.build({
         bar: {
-            bar: undefined
+            bar: null
         }
     });
 
-    assert.deepStrictEqual(actual, { bar: { foo: 'bar', bar: undefined } });
+    assert.deepStrictEqual(actual, { bar: { foo: 'bar', bar: null } });
 });

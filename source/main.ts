@@ -27,13 +27,10 @@ export type Overrides<ObjectShape extends Record<string, AllowedGeneratorReturnS
     readonly [P in keyof ObjectShape]?: OverridesHelper<ObjectShape[P]>;
 };
 
-export type OverridesHelper<T> =
-    | (T extends ObjectoryFactory<infer U> ? Overrides<ShapeToGeneratorReturnValue<U>>
-        : T extends ArrayFactoryValue<infer U> ? readonly (Overrides<ShapeToGeneratorReturnValue<U>> | undefined)[]
-        : T extends readonly (infer U)[] ? readonly OverridesHelper<U>[]
-        : T)
-    | null
-    | undefined;
+export type OverridesHelper<T> = T extends ObjectoryFactory<infer U> ? Overrides<ShapeToGeneratorReturnValue<U>>
+    : T extends ArrayFactoryValue<infer U> ? readonly (Overrides<ShapeToGeneratorReturnValue<U>> | undefined)[]
+    : T extends readonly (infer U)[] ? readonly (OverridesHelper<U> | undefined)[]
+    : T;
 
 export type ObjectoryFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>> = {
     readonly build: (overrides?: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>) => ObjectShape;
