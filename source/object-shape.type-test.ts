@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'tstyche';
 import {
     createFactory,
+    createUnionFactory,
     type ArrayFactoryValue,
     type GeneratorFunction as ObjectoryGeneratorFunction
 } from './main.ts';
@@ -13,6 +14,7 @@ type TupleShape = { readonly pair: readonly ['a', true]; };
 type VariantA = { readonly kind: 'a'; };
 type VariantB = { readonly kind: 'b'; };
 type UnionItemArrayShape = { readonly items: readonly (VariantA | VariantB)[]; };
+type NestedUnionShape = { readonly variant: VariantA | VariantB; };
 type SingleVariantArrayShape = { readonly items: ArrayFactoryValue<VariantA>; };
 type SingleVariantArrayGenerator = () => SingleVariantArrayShape;
 type PersonShape = { readonly name: string; readonly age: number; };
@@ -78,21 +80,25 @@ describe('object shapes accepted by createFactory()', function () {
         });
     });
 
-    test('requires an array factory covering every item shape of a union', function () {
+    test('accepts an array factory for one variant of a union item shape', function () {
         const singleVariantFactory = createFactory<VariantA>(function () {
             return { kind: 'a' };
         });
-        const unionFactory = createFactory<VariantA | VariantB>(function () {
-            return { kind: 'a' };
+        const variantBFactory = createFactory<VariantB>(function () {
+            return { kind: 'b' };
         });
+        const unionFactory = createUnionFactory([ singleVariantFactory, variantBFactory ]);
 
         expect(createFactory<UnionItemArrayShape>).type.toBeCallableWith(function () {
             return { items: unionFactory.asArray({ length: 1 }) };
         });
-        expect(singleVariantFactory.asArray({ length: 1 })).type.not.toBeAssignableTo<
+        expect(createFactory<UnionItemArrayShape>).type.toBeCallableWith(function () {
+            return { items: singleVariantFactory.asArray({ length: 1 }) };
+        });
+        expect(singleVariantFactory.asArray({ length: 1 })).type.toBeAssignableTo<
             ArrayFactoryValue<VariantA | VariantB>
         >();
-        expect<SingleVariantArrayGenerator>().type.not.toBeAssignableTo<
+        expect<SingleVariantArrayGenerator>().type.toBeAssignableTo<
             ObjectoryGeneratorFunction<UnionItemArrayShape>
         >();
     });
@@ -139,6 +145,18 @@ describe('object shapes accepted by createFactory()', function () {
 });
 
 describe('array element shapes accepted by createFactory()', function () {
+    test('accepts a plain array mixing factories for different variants of a union item shape', function () {
+        const variantAFactory = createFactory<VariantA>(function () {
+            return { kind: 'a' };
+        });
+        const variantBFactory = createFactory<VariantB>(function () {
+            return { kind: 'b' };
+        });
+
+        expect(createFactory<UnionItemArrayShape>).type.toBeCallableWith(function () {
+            return { items: [ variantAFactory, variantBFactory ] };
+        });
+    });
     test('accepts a plain array of factories with differing defaults', function () {
         const janeFactory = createFactory<PersonShape>(function () {
             return { name: 'Jane Doe', age: 32 };
@@ -162,6 +180,38 @@ describe('array element shapes accepted by createFactory()', function () {
         });
         expect(createFactory<CrewShape>).type.not.toBeCallableWith(function () {
             return { crew: [ { name: 'Jane Doe', age: 32 } ] };
+        });
+    });
+});
+
+describe('union shapes accepted by createFactory()', function () {
+    test('rejects a union shape and points at createUnionFactory()', function () {
+        expect(createFactory<VariantA | VariantB>).type.not.toBeCallableWith(function () {
+            return { kind: 'a' };
+        });
+    });
+
+    test('accepts a factory typed to the whole union for a union-typed property', function () {
+        const variantAFactory = createFactory<VariantA>(function () {
+            return { kind: 'a' };
+        });
+        const variantBFactory = createFactory<VariantB>(function () {
+            return { kind: 'b' };
+        });
+        const unionFactory = createUnionFactory([ variantAFactory, variantBFactory ]);
+
+        expect(createFactory<NestedUnionShape>).type.toBeCallableWith(function () {
+            return { variant: unionFactory };
+        });
+    });
+
+    test('rejects a factory pinned to one variant for a union-typed property', function () {
+        const variantAFactory = createFactory<VariantA>(function () {
+            return { kind: 'a' };
+        });
+
+        expect(createFactory<NestedUnionShape>).type.not.toBeCallableWith(function () {
+            return { variant: variantAFactory };
         });
     });
 });

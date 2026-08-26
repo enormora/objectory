@@ -73,5 +73,5 @@ test('buildInvalidWithChanged() throws instead of creating structure through a p
 
     assert.throws(function () {
         return factory.buildInvalidWithChanged('count.deeper', 'other');
-    }, /Cannot resolve path "deeper"/u);
+    }, /Cannot resolve path "count\.deeper"/u);
 });

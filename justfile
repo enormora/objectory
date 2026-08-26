@@ -15,10 +15,13 @@ lint-fix:
 test-unit:
 	node --test --test-isolation="none" source/**/*.test.ts
 
+test-unit-property:
+	node --test --test-isolation="none" source/**/*.property.ts
+
 test-types:
 	tstyche
 
-test: compile lint test-unit test-types
+test: compile lint test-unit test-unit-property test-types
 
 packtory-dry-run: compile
 	packtory publish

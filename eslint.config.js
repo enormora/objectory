@@ -22,10 +22,10 @@ export default [
     },
     {
         ...nodeAssertConfig,
-        files: [ '**/*.test.ts' ]
+        files: [ '**/*.test.ts', '**/*.property.ts' ]
     },
     {
-        files: [ '**/*.test.ts' ],
+        files: [ '**/*.test.ts', '**/*.property.ts' ],
         rules: {
             '@typescript-eslint/no-floating-promises': [
                 'error',

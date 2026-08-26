@@ -51,6 +51,23 @@ Every object in the generator must come from a factory: `createFactory()` for a 
 array of factories for an array of objects. Anything else is rejected when building, so a type assertion that skips a
 nested factory fails loudly instead of silently dropping defaults on partial overrides.
 
+### `createUnionFactory(variants)`
+
+Create a factory for a union of object shapes from one factory per variant. The first entry is the variant it builds by
+default.
+
+```ts
+const httpRequestFactory = createUnionFactory([ getRequestFactory, postRequestFactory ]);
+```
+
+`createFactory` rejects a union of object shapes and points here, because a factory built from a single generator has no
+other variant to build, so a switch could only merge and leave the previous variant's keys behind. A property typed by a
+union needs a union factory for the same reason. See [Discriminated unions](#discriminated-unions).
+
+Always give `createFactory` its type argument. The shape is what the factory is for, and inferring it from the generator
+gives narrower types than a fixture wants: a nested factory declared without one keeps its literal types, so its
+properties stop accepting other values.
+
 ### `factory.build(overrides?)`
 
 Build a single object, optionally overriding selected properties at any depth.
@@ -62,6 +79,17 @@ const adult = personFactory.build({ age: 21 });
 Overrides are plain values, never factories: use `anotherFactory.build()` or `anotherFactory.buildList()` when the
 override values should come from another factory.
 
+An override has to be a value the property's declared type allows, and it has to match the kind of value the generator
+put there: a nested factory takes an object of overrides, an array property takes an array of them. Anything else is a
+compile error, and a type assertion that gets around it fails loudly at build time rather than being dropped.
+
+Pass `{ freeze: true }` as a second argument to deep-freeze the result, so a test that mutates a fixture fails at the
+mutation instead of leaking state into a later assertion:
+
+```ts
+const frozenAdult = personFactory.build({ age: 21 }, { freeze: true });
+```
+
 ### `factory.buildList({ length })`
 
 Build an array of identical instances by repeatedly calling `build`.
@@ -69,6 +97,16 @@ Build an array of identical instances by repeatedly calling `build`.
 ```ts
 const passengers = personFactory.buildList({ length: 3 });
 ```
+
+When the length is a literal, the result is a tuple of exactly that length, so destructuring gives you defined elements
+rather than `Person | undefined`:
+
+```ts
+const [ driver, guide ] = personFactory.buildList({ length: 2 });
+```
+
+A length that is only known at runtime, or one above 64, gives `readonly Person[]` instead. `buildList` also accepts
+`freeze`, which freezes the list and every element in it.
 
 `buildList` returns built objects, not factories, so its result cannot be used as an array property inside a generator. Use
 `asArray` or a plain array of factories there.
@@ -104,6 +142,18 @@ const busFactory = createFactory<Bus>(() => ({
 Array elements must be factories. A plain array of already built objects is rejected, for the same reason a nested object
 must be a factory rather than a plain literal.
 
+For a property typed as a fixed-length tuple, the length has to agree with the tuple:
+
+```ts
+type Wheels = { readonly wheels: readonly [Wheel, Wheel]; };
+
+createFactory<Wheels>(() => ({ wheels: wheelFactory.asArray({ length: 2 }) })); // accepted
+createFactory<Wheels>(() => ({ wheels: wheelFactory.asArray({ length: 3 }) })); // rejected
+```
+
+The mismatch is reported as `Type '3' is not assignable to type '2'`. A length that is only known at runtime cannot be
+checked, so it is rejected for a tuple property and accepted for an unbounded array property.
+
 ### `factory.withOverrides(overrides)`
 
 Create a new factory that always applies the given overrides before any ad-hoc overrides.
@@ -115,7 +165,7 @@ const namedPerson = namedFactory.build();
 
 ### `factory.extend(extensionGenerator)`
 
-Derive a new factory by merging the base shape with additional fields from an extension generator.
+Derive a factory for a **different type** that adds fields the base type does not have.
 
 ```ts
 type Employee = Person & {
@@ -129,8 +179,54 @@ const employeeFactory = personFactory.extend<Employee>(() => ({
 const employee = employeeFactory.build();
 ```
 
-All three `buildInvalid*` methods throw when `path` does not resolve against the built object, rather than returning it
-unchanged. A typo would otherwise leave the assertion testing nothing.
+`extend` needs the new type spelled out, because it is the whole point of the call.
+
+### `withOverrides` or `extend`?
+
+Reach for `extend` only when the type changes. Everything else is `withOverrides`.
+
+|                                           | `withOverrides` | `extend`                   |
+| ----------------------------------------- | --------------- | -------------------------- |
+| Changes                                   | values          | the type, by adding fields |
+| Result type                               | the same shape  | the extended shape         |
+| Needs a type argument                     | no              | yes                        |
+| Can add a property the type does not have | no              | yes                        |
+| Layers with itself                        | later one wins  | later one wins             |
+
+An extension may also give a base property a different default, but a value change is what `withOverrides` is for, so
+prefer it. If both set the same property, **the override wins whichever order they were applied in**, because an
+extension contributes a generator value and overrides are applied on top of whatever the generator produced:
+
+```ts
+baseFactory
+    .withOverrides({ label: 'from overrides' })
+    .extend<Extended>(() => ({ extra: 'x', label: 'from extension' }))
+    .build(); // label is 'from overrides'
+```
+
+See [Composing factories](#composing-factories).
+
+### Paths in the `buildInvalid*` methods
+
+A `path` walks the **built** object, with a dot between segments and a number for an array index:
+
+```ts
+monitorFactory.buildInvalidWithout('request.url');
+monitorFactory.buildInvalidWithChanged('request.retries', 'many');
+monitorFactory.buildInvalidWithAdditional('request.timeout', 5);
+feedFactory.buildInvalidWithChanged('articles.0.title', 42);
+```
+
+A path that does not resolve throws, rather than returning the object unchanged, since a typo would otherwise leave the
+assertion testing nothing. The error names the whole path, not the part that failed:
+
+```text
+Cannot resolve path "request.uurl"
+```
+
+`buildInvalidWithout` and `buildInvalidWithChanged` need the whole path to resolve. `buildInvalidWithAdditional` needs only
+the parent to resolve, since its job is to add something new, so it accepts a leaf that does not exist yet at any depth and
+rejects one that already does. For an array path it inserts at the index, which may equal the length but not exceed it.
 
 ### `factory.buildInvalidWithout(path)`
 
@@ -171,27 +267,19 @@ What an override does depends on the kind of value the generator put in that pro
 Two consequences are worth knowing before you rely on them.
 
 **A merge can add keys, but it can never remove them.** Overriding a nested factory with `{}` changes nothing, and
-overriding a map-like nested factory with different keys yields the union of both. When you need different nested data
-rather than a few different fields, compose a different factory instead of overriding. See
-[Composing factories](#composing-factories).
+overriding a map-like nested factory with different keys yields the union of both. That is why a base factory should carry
+the minimal shape that satisfies its type: then nothing ever needs removing. See
+[Composing factories](#composing-factories). A union-typed value is the exception, because a union factory builds the
+variant it switches to rather than merging onto the previous one. See
+[Discriminated unions](#discriminated-unions).
 
-**An explicit `undefined` always sets the property to `undefined`**, whatever kind of value the generator put there, and
-keeps the key. Leaving the property out of the overrides is what asks for the default:
+**An override has to be a value the declared type allows.** `undefined` and `null` are accepted only where the property's
+type spells them out, so `build({ name: undefined })` on a required `string` is a compile error rather than a way to build
+a value the type forbids. Use the `buildInvalid*` family when a test wants exactly that.
 
-```ts
-const busFactory = createFactory<Bus>(() => ({
-    passengers: personFactory.asArray({ length: 2 })
-}));
-
-busFactory.build({ passengers: undefined }); // { passengers: undefined }
-busFactory.build({}); // two passengers, from the defaults
-```
-
-Overrides accept `undefined` for every property, including properties whose type does not include it, so this is also a
-way to build a value the declared type does not allow. That is useful for a test that wants exactly that, but nothing
-checks it for you.
-
-Inside an override _array_, `undefined` at an index keeps that element's default instead, which is what makes
+Where the type does allow it, an explicit `undefined` sets the property to `undefined` and keeps the key, whatever kind of
+value the generator put there. Leaving the property out of the overrides is what asks for the default. Inside an override
+_array_, `undefined` at an index keeps that element's default instead, which is what makes
 `[ undefined, { name: 'Jane' } ]` a way to override only the second element.
 
 An override array's length always wins, so an explicit `[]` empties the property:
@@ -244,56 +332,74 @@ const trip = tripFactory.build({
 
 ### Composing factories
 
-Prefer a factory that carries the minimum needed to satisfy its type, then build the fuller cases on top of it with
-`extend`. Overrides then only have to express what a single test cares about.
+`extend` is for a **new type** that adds fields the base type does not have. Everything else is `withOverrides`.
+
+A merge can add keys but never remove them, so give the base factory the **minimal shape that satisfies its type**: no
+properties that are not required, and the smallest variant as a nested default. Then no test ever needs to remove
+anything, and `withOverrides` is always enough.
 
 ```ts
 type Product = {
     name: string;
     description: string;
+    discountedPrice?: number;
 };
 
 const productFactory = createFactory<Product>(() => ({
     name: 'Widget',
     description: ''
 }));
+```
 
-const describedProductFactory = productFactory.extend<Product>(() => ({
-    description: 'A very good widget'
+The generator leaves `discountedPrice` out, because nothing requires it. A test that cares about it asks for it, and one
+that does not never sees the key:
+
+```ts
+const describedProductFactory = productFactory.withOverrides({ description: 'A very good widget' });
+const discountedProductFactory = productFactory.withOverrides({ discountedPrice: 9 });
+
+productFactory.build(); // { name: 'Widget', description: '' }
+discountedProductFactory.build(); // { name: 'Widget', description: '', discountedPrice: 9 }
+```
+
+`extend` is for the case where the type itself changes:
+
+```ts
+type Employee = Product & {
+    employeeId: string;
+};
+
+const employeeFactory = productFactory.extend<Employee>(() => ({
+    employeeId: 'E-001'
 }));
 ```
 
-This is also the answer whenever a merge cannot express what you need, because a merge never removes keys. `extend` can
-replace a nested factory outright, which an override cannot:
+The minimal rule applies to nested factories too. Give the nested factory the empty shape and add to it, rather than
+giving it a full one and trying to take away:
 
 ```ts
 type Translations = Readonly<Record<string, string>>;
 type Listing = { title: Translations; };
 
-const titleFactory = createFactory<Translations>(() => ({ 'de-DE': 'Titel' }));
 const untranslatedTitleFactory = createFactory<Translations>(() => ({}));
+const listingFactory = createFactory<Listing>(() => ({ title: untranslatedTitleFactory }));
 
-const listingFactory = createFactory<Listing>(() => ({ title: titleFactory }));
-
-// merging cannot get rid of the 'de-DE' key
-listingFactory.build({ title: {} }); // { title: { 'de-DE': 'Titel' } }
-
-// composing a different factory can
-const untranslatedListingFactory = listingFactory.extend<Listing>(() => ({
-    title: untranslatedTitleFactory
-}));
-untranslatedListingFactory.build(); // { title: {} }
+listingFactory.build(); // { title: {} }
+listingFactory.withOverrides({ title: { 'de-DE': 'Titel' } }).build(); // { title: { 'de-DE': 'Titel' } }
 ```
+
+Had `titleFactory` defaulted to `{ 'de-DE': 'Titel' }`, no override could get back to `{}`, because a merge cannot remove
+the key. That is the shape of every problem the minimal rule avoids.
 
 ### Discriminated unions
 
-For a union of object types distinguished by a discriminator, there are two complementary shapes. Which one you reach for depends on whether a given test wants a fixed variant or any member of the union.
-
-Build a factory fixed to one variant by typing it to that variant. The discriminator is an ordinary field with a literal default:
+For a union of object shapes, write one factory per variant and combine them with `createUnionFactory`. The first entry is
+the variant it builds by default.
 
 ```ts
-type GetRequest = { method: 'GET'; url: string; retries: number; };
-type PostRequest = { method: 'POST'; url: string; retries: number; body: string; };
+type CommonRequest = { url: string; retries: number; };
+type GetRequest = CommonRequest & { method: 'GET'; };
+type PostRequest = CommonRequest & { method: 'POST'; body: string; };
 type HttpRequest = GetRequest | PostRequest;
 
 const getRequestFactory = createFactory<GetRequest>(() => ({
@@ -301,26 +407,49 @@ const getRequestFactory = createFactory<GetRequest>(() => ({
     url: 'https://example.com',
     retries: 3
 }));
-```
 
-Build a factory for the whole union by typing it to the union. The generator returns any one variant, and `build()` returns the union type. Overrides can reshape the built variant but cannot switch it to another one:
-
-```ts
-const httpRequestFactory = createFactory<HttpRequest>(() => ({
-    method: 'GET',
+const postRequestFactory = createFactory<PostRequest>(() => ({
+    method: 'POST',
     url: 'https://example.com',
-    retries: 3
+    retries: 3,
+    body: '{}'
 }));
+
+const httpRequestFactory = createUnionFactory([ getRequestFactory, postRequestFactory ]);
 ```
 
-To share the fields common to every variant, build a factory for the common part and derive each variant with `extend`, adding that variant's discriminator and extra fields. The variants reuse the common defaults, and nested shared factories stay overridable at any depth:
+A property every variant has is overridable as usual. Naming the discriminator switches variant, and the target variant is
+built from its own factory, so nothing of the previous one is left behind:
 
 ```ts
-type CommonFields = { url: string; retries: number; };
-type GetRequest = CommonFields & { method: 'GET'; };
-type PostRequest = CommonFields & { method: 'POST'; body: string; };
+httpRequestFactory.build();
+// { method: 'GET', url: 'https://example.com', retries: 3 }
 
-const commonRequestFactory = createFactory<CommonFields>(() => ({
+httpRequestFactory.build({ retries: 0 });
+// { method: 'GET', url: 'https://example.com', retries: 0 }
+
+httpRequestFactory.build({ method: 'POST' });
+// { method: 'POST', url: 'https://example.com', retries: 3, body: '{}' }
+
+httpRequestFactory.build({ method: 'POST', body: '{"a":1}' });
+// { method: 'POST', url: 'https://example.com', retries: 3, body: '{"a":1}' }
+```
+
+You only have to name the fields you care about. The rest come from the variant you switched to, not from the one you
+switched away from.
+
+An override that does not say which variant it means is rejected, because nothing can decide it:
+
+```ts
+httpRequestFactory.build({ body: '{}' }); // rejected, which variant?
+httpRequestFactory.build({ method: 'GET', body: '{}' }); // rejected, a GET has no body
+httpRequestFactory.build({ method: 'PATCH' }); // rejected, no such variant
+```
+
+To share the fields common to every variant, build a factory for the common part and derive each variant with `extend`:
+
+```ts
+const commonRequestFactory = createFactory<CommonRequest>(() => ({
     url: 'https://example.com',
     retries: 3
 }));
@@ -334,51 +463,23 @@ const postRequestFactory = commonRequestFactory.extend<PostRequest>(() => ({
 
 #### A union-typed property
 
-When the union sits in a _property_ rather than at the root, the nested factory has to pick one variant as its default.
-Overriding that property merges, and a merge never removes keys, so switching to another variant leaves the fields of the
-first one behind:
+A union factory works as a nested value and inside `asArray`, and the same rules apply:
 
 ```ts
-type NoData =
-    | { notifyNoData: false; }
-    | { notifyNoData: true; timeframeMinutes: number; };
-
-type Monitor = { name: string; noData: NoData; };
-
-const notifyingFactory = createFactory<Extract<NoData, { notifyNoData: true; }>>(() => ({
-    notifyNoData: true,
-    timeframeMinutes: 5
-}));
+type Monitor = { name: string; request: HttpRequest; };
 
 const monitorFactory = createFactory<Monitor>(() => ({
     name: 'monitor',
-    noData: notifyingFactory
+    request: httpRequestFactory
 }));
 
-monitorFactory.build({ noData: { notifyNoData: false } });
-// { name: 'monitor', noData: { notifyNoData: false, timeframeMinutes: 5 } }
-//                            ^ timeframeMinutes survived, and this is not a NoData
+monitorFactory.build({ request: { method: 'POST' } });
+// { name: 'monitor', request: { method: 'POST', url: 'https://example.com', retries: 3, body: '{}' } }
 ```
 
-Compose a factory per variant instead of overriding across variants:
-
-```ts
-const silentFactory = createFactory<Extract<NoData, { notifyNoData: false; }>>(() => ({
-    notifyNoData: false
-}));
-
-const silentMonitorFactory = monitorFactory.extend<Monitor>(() => ({ noData: silentFactory }));
-
-silentMonitorFactory.build();
-// { name: 'monitor', noData: { notifyNoData: false } }
-```
-
-Overriding _within_ the variant the factory already builds is fine, because no keys need removing:
-
-```ts
-monitorFactory.build({ noData: { timeframeMinutes: 30 } });
-// { name: 'monitor', noData: { notifyNoData: true, timeframeMinutes: 30 } }
-```
+A union-typed property needs a **union** factory, not one pinned to a single variant. Only a union factory knows the other
+variants, so only it can honour a switch; a pinned one would have to merge and leave the previous variant's keys behind.
+To pin a variant for a fixture, put it first in `createUnionFactory` so it is the default.
 
 ## Troubleshooting
 
@@ -394,6 +495,26 @@ createFactory<Car>(() => ({ driver: personFactory })); // accepted
 The same message with `Type 'Person' is missing ...` inside a `readonly ObjectoryFactory<...>[]` means an array property
 was given already built objects rather than factories. `buildList` produces built objects, so use `asArray` or a plain
 array of factories.
+
+**`not assignable to parameter of type '() => "objectory: this shape is a union of object types, use createUnionFactory() instead"'`**
+
+`createFactory` was given a union of object shapes. Write one factory per variant and combine them with
+[`createUnionFactory`](#createunionfactoryvariants).
+
+**`Type '3' is not assignable to type '2'` on an `ArrayFactoryValue`**
+
+`asArray` was given a length that does not match a fixed-length tuple property. The two numbers are the length you asked
+for and the length the tuple has.
+
+**`Invalid override at "…": a nested factory takes an object of overrides, received …`**
+
+An override did not match the kind of value the generator put there. A nested factory takes an object, an array property
+takes an array. The path names the property, counting from the object you called `build` on.
+
+**`Invalid override for a union factory: no registered variant matches it`**
+
+An override for a union factory named keys, or a discriminator value, that no registered variant has. Either name the
+discriminator of a variant that is registered, or add the missing variant to `createUnionFactory`.
 
 ## Prior art
 

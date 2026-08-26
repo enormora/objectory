@@ -1,19 +1,101 @@
 /* eslint-disable @stylistic/operator-linebreak, @stylistic/indent -- conflicts with dprint */
 import { addValueAtPath, normalizePath, removePropertyAtPath, setValueAtPath } from './path-operations.ts';
-import { isRecord } from './record.ts';
+import type { ElementsForOptions, LengthForOptions } from './array-lengths.ts';
+import type { ArrayFactoryOptions, BuildListOptions, BuildOptions } from './factory-options.ts';
+import {
+    createOverrideWrapper,
+    noOverrideMarker,
+    normalizeOverride,
+    type NormalizedOverride
+} from './override-wrapper.ts';
 
-const arrayFactorySymbol: unique symbol = Symbol('objectory.arrayFactory');
-const factorySymbol: unique symbol = Symbol('objectory.factory');
-const noOverrideSymbol: unique symbol = Symbol('objectory.noOverride');
-const overrideWrapperSymbol: unique symbol = Symbol('objectory.overrideWrapper');
-const primitiveAllowedTypes = new Set([ 'string', 'number', 'boolean', 'bigint', 'symbol', 'function' ]);
+import { createVariantSelector } from './union-variants.ts';
+import { assertAllowedObjectShapeValue, assertObjectValueComesFromFactory } from './object-shape-values.ts';
+import { deepFreeze } from './deep-freeze.ts';
+import {
+    assertOverrideMatchesArrayProperty,
+    assertOverrideMatchesNestedFactory,
+    childPath,
+    joinPath,
+    rootPath,
+    type ValuePath
+} from './override-values.ts';
+import { arrayFactorySymbol, buildAtPathSymbol, factorySymbol } from './factory-symbols.ts';
+import {
+    assertOverrideContainsNoFactories,
+    isAllowedOverrideValue,
+    isArrayFactoryValue,
+    isFactory
+} from './factory-guards.ts';
 
-export type ArrayFactoryOptions = {
-    readonly length?: number;
+type AnyOverridableShape = Readonly<Record<string, AllowedObjectShapeValues>>;
+
+type AllKeys<Union> = Union extends unknown ? keyof Union : never;
+
+type Forbid<Keys extends PropertyKey> = Readonly<Partial<Record<Keys, never>>>;
+
+type UnionToIntersection<Union> = (Union extends unknown ? (argument: Union) => void : never) extends
+    (argument: infer Intersection) => void ? Intersection : never;
+
+type IsUnion<Candidate, Copy = Candidate> = Candidate extends unknown ? ([Copy] extends [Candidate] ? false : true)
+    : never;
+
+type OverridesForShape<Shape> = Shape extends AnyOverridableShape ? Overrides<ShapeToGeneratorReturnValue<Shape>>
+    : never;
+
+type DiscriminatingKeys<Default, Target> = {
+    [Key in keyof Target]-?: Key extends keyof Default ? (Default[Key] extends Target[Key] ? never : Key) : never;
+}[keyof Target];
+
+type KeysToOverride<Default, Target> = Exclude<keyof Target, DiscriminatingKeys<Default, Target>>;
+
+type VariantBranch<Union, Default, Target> =
+    & Forbid<Exclude<AllKeys<Union>, keyof Target>>
+    & OverridesForShape<Pick<Target, KeysToOverride<Default, Target>>>
+    & Pick<Target, DiscriminatingKeys<Default, Target> & keyof Target>;
+
+type SharedBranch<Union> =
+    & Forbid<Exclude<AllKeys<Union>, keyof Union>>
+    & UnionToIntersection<Union extends unknown ? OverridesForShape<Pick<Union, keyof Union>> : never>;
+
+type VariantBranches<Union, Default, Members> = Members extends unknown ? VariantBranch<Union, Default, Members>
+    : never;
+
+type UnionOverride<Union, Default> = SharedBranch<Union> | VariantBranches<Union, Default, Union>;
+
+type FactoryOverride<ObjectShape, Default> = true extends IsUnion<ObjectShape> ? UnionOverride<ObjectShape, Default>
+    : Overrides<ShapeToGeneratorReturnValue<Extract<ObjectShape, AnyOverridableShape>>>;
+
+function emptyOverrides<ObjectShape extends AnyOverridableShape, DefaultShape extends ObjectShape>(): FactoryOverride<
+    ObjectShape,
+    DefaultShape
+> {
+    const noOverrides: unknown = {};
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- an empty override fits every branch
+    return noOverrides as FactoryOverride<ObjectShape, DefaultShape>;
+}
+
+type UseCreateUnionFactory = 'objectory: this shape is a union of object types, use createUnionFactory() instead';
+
+type GeneratedShapeOrRejection<ObjectShape extends AnyOverridableShape> = true extends IsUnion<ObjectShape>
+    ? UseCreateUnionFactory
+    : ShapeToGeneratorReturnValue<ObjectShape>;
+
+export type ArrayFactoryValue<
+    ObjectShape extends Record<string, AllowedObjectShapeValues>,
+    Length extends number = number
+> = {
+    readonly factory: {
+        readonly build: (overrides?: never) => ObjectShape;
+        readonly [factorySymbol]: true;
+    };
+    readonly length: Length;
+    readonly [arrayFactorySymbol]: true;
 };
 
-export type ArrayFactoryValue<ObjectShape extends Record<string, AllowedObjectShapeValues>> = {
-    readonly factory: ObjectoryFactory<ObjectShape>;
+type MaterializableArrayFactory = {
+    readonly factory: ObjectoryFactory<Readonly<Record<string, AllowedObjectShapeValues>>>;
     readonly length: number;
     readonly [arrayFactorySymbol]: true;
 };
@@ -23,31 +105,47 @@ export type ExtensionShape<
     ExtendedShape extends BaseShape
 > = Partial<Pick<ExtendedShape, keyof BaseShape>> & Pick<ExtendedShape, Exclude<keyof ExtendedShape, keyof BaseShape>>;
 
-export type Overrides<ObjectShape extends Record<string, AllowedGeneratorReturnShape>> = {
+export type Overrides<ObjectShape> = {
     readonly [P in keyof ObjectShape]?: OverridesHelper<ObjectShape[P]>;
 };
 
-export type OverridesHelper<T> =
-    | (T extends ObjectoryFactory<infer U> ? Overrides<ShapeToGeneratorReturnValue<U>>
-        : T extends ArrayFactoryValue<infer U> ? readonly (Overrides<ShapeToGeneratorReturnValue<U>> | undefined)[]
-        : T extends readonly (infer U)[] ? readonly OverridesHelper<U>[]
-        : T)
-    | null
-    | undefined;
+type FactoryLike<Shape> = { readonly build: (...args: never) => Shape; readonly [factorySymbol]: true; };
 
-export type ObjectoryFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>> = {
-    readonly build: (overrides?: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>) => ObjectShape;
-    readonly asArray: (options?: ArrayFactoryOptions) => ArrayFactoryValue<ObjectShape>;
+type ShapeBuiltByFactory<T> = T extends FactoryLike<infer Shape> ? Shape : never;
+
+export type OverridesHelper<T> = [ShapeBuiltByFactory<T>] extends [never]
+    ? (T extends ArrayFactoryValue<infer U> ? readonly (Overrides<ShapeToGeneratorReturnValue<U>> | undefined)[]
+        : T extends readonly (infer U)[] ? readonly (OverridesHelper<U> | undefined)[]
+        : T)
+    : Extract<T, null | undefined> | FactoryOverride<ShapeBuiltByFactory<T>, ShapeBuiltByFactory<T>>;
+
+export type ObjectoryFactory<
+    ObjectShape extends Record<string, AllowedObjectShapeValues>,
+    DefaultShape extends ObjectShape = ObjectShape
+> = {
+    readonly build: (
+        overrides?: FactoryOverride<ObjectShape, DefaultShape>,
+        options?: BuildOptions
+    ) => ObjectShape;
+    readonly asArray: <const Options extends ArrayFactoryOptions = Readonly<Record<string, never>>>(
+        options?: Options
+    ) => ArrayFactoryValue<ObjectShape, LengthForOptions<Options>>;
     readonly withOverrides: (
-        overrides: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>
-    ) => ObjectoryFactory<ObjectShape>;
+        overrides: FactoryOverride<ObjectShape, DefaultShape>
+    ) => ObjectoryFactory<ObjectShape, DefaultShape>;
     readonly extend: <ExtendedObjectShape extends ObjectShape>(
         extensionGenerator: () => ShapeToGeneratorReturnValue<ExtensionShape<ObjectShape, ExtendedObjectShape>>
     ) => ObjectoryFactory<ExtendedObjectShape>;
-    readonly buildList: (options?: ArrayFactoryOptions) => readonly ObjectShape[];
+    readonly buildList: <const Options extends BuildListOptions = Readonly<Record<string, never>>>(
+        options?: Options
+    ) => ElementsForOptions<ObjectShape, Options>;
     readonly buildInvalidWithout: (path: string) => unknown;
     readonly buildInvalidWithChanged: (path: string, value: unknown) => unknown;
     readonly buildInvalidWithAdditional: (path: string, value: unknown) => unknown;
+    readonly [buildAtPathSymbol]: (
+        overrides: FactoryOverride<ObjectShape, DefaultShape>,
+        pathPrefix: string
+    ) => ObjectShape;
     readonly [factorySymbol]: true;
 };
 
@@ -59,18 +157,43 @@ type TupleToGeneratorReturnValue<TupleShape> = {
     readonly [Index in keyof TupleShape]: ShapeToGeneratorReturnValueHelper<TupleShape[Index]>;
 };
 
-export type ShapeToGeneratorReturnValueHelper<T> = T extends readonly (infer ItemShape)[]
+type TupleArrayFactory<TupleShape extends { readonly length: number; }> = TupleShape extends
+    readonly (infer ItemShape)[]
+    ? ([ItemShape] extends [Record<string, AllowedObjectShapeValues>]
+        ? ArrayFactoryValue<Extract<ItemShape, Record<string, AllowedObjectShapeValues>>, TupleShape['length']>
+        : never)
+    : never;
+
+type ShapePart<T> = Exclude<T, null | undefined>;
+
+type WholeShapeFactory<T> = [ShapePart<T>] extends [readonly unknown[]] ? never
+    : [ShapePart<T>] extends [Record<string, AllowedObjectShapeValues>]
+        ? Extract<T, null | undefined> | ObjectoryFactory<ShapePart<T>>
+    : never;
+
+type NonObjectGeneratorValue<T> = T extends Record<string, AllowedObjectShapeValues> ? never
+    : DistributedShapeToGeneratorReturnValue<T>;
+
+type DistributedShapeToGeneratorReturnValue<T> = T extends readonly (infer ItemShape)[]
     ? number extends T['length']
         ? ArrayItemToGeneratorReturnValue<ItemShape> | readonly ShapeToGeneratorReturnValueHelper<ItemShape>[]
-    : TupleToGeneratorReturnValue<T>
+    : TupleArrayFactory<T> | TupleToGeneratorReturnValue<T>
     : T extends Record<string, AllowedObjectShapeValues> ? ObjectoryFactory<T>
     : T;
 
+export type ShapeToGeneratorReturnValueHelper<T> =
+    | DistributedShapeToGeneratorReturnValue<T>
+    | WholeShapeFactory<T>;
+
+type PropertyGeneratorValue<Value> = true extends IsUnion<ShapePart<Value>>
+    ? NonObjectGeneratorValue<Value> | WholeShapeFactory<Value>
+    : ShapeToGeneratorReturnValueHelper<Value>;
+
 export type ShapeToGeneratorReturnValue<T extends Record<string, AllowedObjectShapeValues>> = {
-    readonly [P in keyof T]: ShapeToGeneratorReturnValueHelper<T[P]>;
+    readonly [P in keyof T]: PropertyGeneratorValue<T[P]>;
 };
 
-type GeneratedObjectToShape<T extends Record<string, AllowedGeneratorReturnShape>> = {
+type GeneratedObjectToShape<T> = {
     readonly [P in keyof T]: GeneratedObjectToShapeHelper<T[P]>;
 };
 
@@ -82,10 +205,6 @@ type GeneratedObjectToShapeHelper<T> = T extends ObjectoryFactory<infer U> ? U
 type GeneratedArrayItemShape<ObjectShape extends Record<string, AllowedObjectShapeValues>> = GeneratedObjectToShape<
     ShapeToGeneratorReturnValue<ObjectShape>
 >;
-
-type OverrideWrapper = { readonly value: unknown; readonly [overrideWrapperSymbol]: true; };
-
-type NormalizedOverride = { readonly applied: false; } | { readonly applied: true; readonly value: unknown; };
 
 export type GeneratorFunction<ObjectShape extends Record<string, AllowedObjectShapeValues>> = () =>
     ShapeToGeneratorReturnValue<ObjectShape>;
@@ -112,201 +231,73 @@ export type AllowedGeneratorReturnShape =
     | ObjectoryFactory<Record<string, AllowedObjectShapeValues>>
     | readonly AllowedGeneratorReturnShape[];
 
-function isFactory<T extends Record<string, AllowedObjectShapeValues>>(value: unknown): value is ObjectoryFactory<T> {
-    return isRecord(value) && value[factorySymbol] === true;
+function toNestedOverride(override: unknown): FactoryOverride<AnyOverridableShape, AnyOverridableShape> {
+    return (override ?? {}) as FactoryOverride<AnyOverridableShape, AnyOverridableShape>;
 }
 
-function isArrayFactoryValue(value: unknown): value is ArrayFactoryValue<Record<string, AllowedObjectShapeValues>> {
-    if (!isRecord(value)) {
-        return false;
-    }
-
-    if (value[arrayFactorySymbol] !== true) {
-        return false;
-    }
-
-    return isFactory(value.factory) && typeof value.length === 'number';
+function toNestedFactory(value: unknown): ObjectoryFactory<AnyOverridableShape> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- isFactory checked the marker
+    return value as ObjectoryFactory<AnyOverridableShape>;
 }
 
-function isPrimitiveAllowedObjectShapeValue(value: unknown): boolean {
-    if (value === null || value === undefined) {
-        return true;
-    }
-
-    if (value instanceof Date) {
-        return true;
-    }
-
-    return primitiveAllowedTypes.has(typeof value);
-}
-
-function isAllowedObjectShapeValue(value: unknown): value is AllowedObjectShapeValues {
-    if (isPrimitiveAllowedObjectShapeValue(value)) {
-        return true;
-    }
-
-    if (Array.isArray(value)) {
-        return value.every(isAllowedObjectShapeValue);
-    }
-
-    if (isRecord(value)) {
-        return Object.values(value).every(isAllowedObjectShapeValue);
-    }
-
-    return false;
-}
-
-function assertObjectValueComesFromFactory(value: unknown, path: string): void {
-    if (!isPrimitiveAllowedObjectShapeValue(value)) {
-        throw new TypeError(
-            `Invalid value at "${path}": use createFactory() for nested objects and asArray() for arrays of objects`
-        );
-    }
-}
-
-function assertOverrideValueIsNotAFactory(value: unknown, path: string): void {
-    if (isFactory(value) || isArrayFactoryValue(value)) {
-        throw new TypeError(
-            `Invalid override at "${path}": factories cannot be used as override values, use build() or buildList()`
-        );
-    }
-}
-
-function assertOverrideContainsNoFactories(value: unknown, path: string): unknown {
-    assertOverrideValueIsNotAFactory(value, path);
-
-    if (Array.isArray(value)) {
-        for (const [ index, item ] of value.entries()) {
-            assertOverrideContainsNoFactories(item, `${path}.${index}`);
-        }
-    }
-
-    if (isRecord(value)) {
-        for (const [ key, child ] of Object.entries(value)) {
-            assertOverrideContainsNoFactories(child, `${path}.${key}`);
-        }
-    }
-
-    return value;
-}
-
-function assertAllowedObjectShapeValue(value: unknown): AllowedObjectShapeValues {
-    if (!isAllowedObjectShapeValue(value)) {
-        throw new TypeError('Invalid value provided for objectory factory');
-    }
-
-    return value;
-}
-
-function isAllowedOverrideValue(value: unknown): boolean {
-    if (value === undefined) {
-        return true;
-    }
-
-    if (Array.isArray(value)) {
-        return value.every(isAllowedOverrideValue);
-    }
-
-    if (isRecord(value)) {
-        return Object.values(value).every(isAllowedOverrideValue);
-    }
-
-    return isAllowedObjectShapeValue(value);
-}
-
-function isOverridesForFactory<F extends ObjectoryFactory<Record<string, AllowedObjectShapeValues>>>(
-    _factory: F,
-    override: unknown
-): override is Parameters<F['build']>[0] {
-    return override === undefined || isAllowedOverrideValue(override);
-}
-
-function createOverrideWrapper(value: unknown): OverrideWrapper {
-    return {
-        value,
-        [overrideWrapperSymbol]: true
-    };
-}
-
-function isOverrideWrapper(value: unknown): value is OverrideWrapper {
-    return isRecord(value) && value[overrideWrapperSymbol] === true;
-}
-
-function isNoOverride(override: unknown): override is typeof noOverrideSymbol {
-    return override === noOverrideSymbol;
-}
-
-function normalizeOverride(override: unknown): NormalizedOverride {
-    if (override === undefined) {
-        return { applied: false };
-    }
-
-    if (isNoOverride(override)) {
-        return { applied: false };
-    }
-
-    if (isOverrideWrapper(override)) {
-        return { applied: true, value: override.value };
-    }
-
-    return { applied: true, value: override };
+function toArrayFactory(value: unknown): MaterializableArrayFactory {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- isArrayFactoryValue checked the marker
+    return value as MaterializableArrayFactory;
 }
 
 function materializeArrayFactoryValue(
-    arrayFactory: ArrayFactoryValue<Record<string, AllowedObjectShapeValues>>,
-    override: unknown
-): AllowedObjectShapeValues {
+    arrayFactory: MaterializableArrayFactory,
+    override: unknown,
+    path: ValuePath
+): unknown {
     const overrideArray: readonly unknown[] | undefined = Array.isArray(override) ? override : undefined;
     const length = overrideArray?.length ?? arrayFactory.length;
 
     return Array.from({ length }, function (_unused, index) {
         const itemOverride = overrideArray?.[index];
+        const itemPath = joinPath(path.fromRoot, index.toString());
 
-        if (!isOverridesForFactory(arrayFactory.factory, itemOverride)) {
+        if (itemOverride !== undefined) {
+            assertOverrideMatchesNestedFactory(itemOverride, itemPath);
+        }
+
+        if (!isAllowedOverrideValue(itemOverride)) {
             throw new TypeError('Invalid override value provided for array factory item');
         }
-
-        if (itemOverride === undefined) {
-            return arrayFactory.factory.build();
-        }
-
-        return arrayFactory.factory.build(itemOverride);
+        return arrayFactory.factory[buildAtPathSymbol](toNestedOverride(itemOverride), itemPath);
     });
 }
 
 function buildFactoryValue(
     factory: ObjectoryFactory<Record<string, AllowedObjectShapeValues>>,
-    override: unknown
-): AllowedObjectShapeValues {
-    if (isOverridesForFactory(factory, override)) {
-        if (override === undefined) {
-            return factory.build();
-        }
-
-        return factory.build(override);
+    override: unknown,
+    pathPrefix: string
+): unknown {
+    if (isAllowedOverrideValue(override)) {
+        return factory[buildAtPathSymbol](toNestedOverride(override), pathPrefix);
     }
 
     throw new TypeError('Invalid override value provided for nested factory');
 }
 
 type TemplateItemResolver = (
-    value: AllowedGeneratorReturnShape,
+    value: unknown,
     overrideValue: unknown,
-    path: string
-) => AllowedObjectShapeValues;
+    path: ValuePath
+) => unknown;
 
 function materializeTemplateArray(
-    template: readonly AllowedGeneratorReturnShape[],
+    template: readonly unknown[],
     override: unknown,
     resolve: TemplateItemResolver,
-    path: string
-): AllowedObjectShapeValues {
+    path: ValuePath
+): unknown {
     if (Array.isArray(override)) {
         return override.map(function (item, index) {
             const templateItem = template[index];
 
             if (templateItem !== undefined) {
-                return resolve(templateItem, item, `${path}.${index}`);
+                return resolve(templateItem, item, childPath(path, index.toString()));
             }
 
             return assertAllowedObjectShapeValue(item);
@@ -314,14 +305,14 @@ function materializeTemplateArray(
     }
 
     return template.map(function (item, index) {
-        return resolve(item, undefined, `${path}.${index}`);
+        return resolve(item, undefined, childPath(path, index.toString()));
     });
 }
 
 function withMaterializedOverride(
     override: NormalizedOverride,
-    materialize: (overrideValue: unknown) => AllowedObjectShapeValues
-): AllowedObjectShapeValues {
+    materialize: (overrideValue: unknown) => unknown
+): unknown {
     if (!override.applied) {
         return materialize(undefined);
     }
@@ -335,37 +326,51 @@ function withMaterializedOverride(
 
 function materializeFactoryWithOverride(
     value: ObjectoryFactory<Record<string, AllowedObjectShapeValues>>,
-    override: NormalizedOverride
-): AllowedObjectShapeValues {
+    override: NormalizedOverride,
+    path: ValuePath
+): unknown {
     return withMaterializedOverride(override, function (resolved) {
-        return buildFactoryValue(value, resolved);
+        if (resolved !== undefined) {
+            assertOverrideMatchesNestedFactory(resolved, path.fromRoot);
+        }
+
+        return buildFactoryValue(value, resolved, path.fromRoot);
     });
 }
 
 function materializeArrayFactoryWithOverride(
-    value: ArrayFactoryValue<Record<string, AllowedObjectShapeValues>>,
-    override: NormalizedOverride
-): AllowedObjectShapeValues {
+    value: MaterializableArrayFactory,
+    override: NormalizedOverride,
+    path: ValuePath
+): unknown {
     return withMaterializedOverride(override, function (resolved) {
-        return materializeArrayFactoryValue(value, resolved);
+        if (resolved !== undefined) {
+            assertOverrideMatchesArrayProperty(resolved, path.fromRoot);
+        }
+
+        return materializeArrayFactoryValue(value, resolved, path);
     });
 }
 
 function materializeTemplateWithOverride(
-    value: readonly AllowedGeneratorReturnShape[],
+    value: readonly unknown[],
     override: NormalizedOverride,
     resolve: TemplateItemResolver,
-    path: string
-): AllowedObjectShapeValues {
+    path: ValuePath
+): unknown {
     return withMaterializedOverride(override, function (resolved) {
+        if (resolved !== undefined) {
+            assertOverrideMatchesArrayProperty(resolved, path.fromRoot);
+        }
+
         return materializeTemplateArray(value, resolved, resolve, path);
     });
 }
 
 function materializeLeafValue(
-    value: AllowedGeneratorReturnShape,
+    value: unknown,
     override: NormalizedOverride
-): AllowedObjectShapeValues {
+): unknown {
     if (override.applied) {
         return assertAllowedObjectShapeValue(override.value);
     }
@@ -374,32 +379,33 @@ function materializeLeafValue(
 }
 
 function materializeValue(
-    value: AllowedGeneratorReturnShape,
+    value: unknown,
     override: unknown,
-    path: string
-): AllowedObjectShapeValues {
+    path: ValuePath
+): unknown {
     const normalizedOverride = normalizeOverride(override);
 
     if (isFactory(value)) {
-        return materializeFactoryWithOverride(value, normalizedOverride);
+        return materializeFactoryWithOverride(toNestedFactory(value), normalizedOverride, path);
     }
 
     if (isArrayFactoryValue(value)) {
-        return materializeArrayFactoryWithOverride(value, normalizedOverride);
+        return materializeArrayFactoryWithOverride(toArrayFactory(value), normalizedOverride, path);
     }
 
     if (Array.isArray(value)) {
         return materializeTemplateWithOverride(value, normalizedOverride, materializeValue, path);
     }
 
-    assertObjectValueComesFromFactory(value, path);
+    assertObjectValueComesFromFactory(value, path.withinFactory);
 
     return materializeLeafValue(value, normalizedOverride);
 }
 
-function applyOverrides<GeneratedObject extends Record<string, AllowedGeneratorReturnShape>>(
+function applyOverrides<GeneratedObject extends Readonly<Record<string, unknown>>>(
     generatedObject: GeneratedObject,
-    overrides: Overrides<GeneratedObject>
+    overrides: Overrides<GeneratedObject>,
+    pathPrefix: string
 ): GeneratedObjectToShape<GeneratedObject> {
     const keys = new Set<keyof GeneratedObject>([
         ...(Object.keys(generatedObject) as (keyof GeneratedObject)[]),
@@ -410,11 +416,12 @@ function applyOverrides<GeneratedObject extends Record<string, AllowedGeneratorR
 
     for (const key of keys) {
         const value = generatedObject[key];
+        const path = rootPath(pathPrefix, String(key));
         const hasOverride = Object.hasOwn(overrides, key);
         const overrideValue = hasOverride
-            ? createOverrideWrapper(assertOverrideContainsNoFactories(overrides[key], String(key)))
-            : noOverrideSymbol;
-        const materialized = materializeValue(value, overrideValue, String(key));
+            ? createOverrideWrapper(assertOverrideContainsNoFactories(overrides[key], path.fromRoot))
+            : noOverrideMarker;
+        const materialized = materializeValue(value, overrideValue, path);
 
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- ok in this case
         entries.push([ key, materialized as GeneratedObjectToShapeHelper<GeneratedObject[typeof key]> ]);
@@ -424,43 +431,67 @@ function applyOverrides<GeneratedObject extends Record<string, AllowedGeneratorR
     return Object.fromEntries(entries) as GeneratedObjectToShape<GeneratedObject>;
 }
 
-function mergeOverrides<GeneratedObject extends Record<string, AllowedGeneratorReturnShape>>(
-    base: Overrides<GeneratedObject>,
-    extension: Overrides<GeneratedObject>
-): Overrides<GeneratedObject> {
+type OverrideRecord = Readonly<Record<string, unknown>>;
+
+function mergeOverrides(base: OverrideRecord, extension: OverrideRecord): OverrideRecord {
     return { ...base, ...extension };
 }
 
-function createArrayFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>>(
-    factory: ObjectoryFactory<ObjectShape>,
-    options?: ArrayFactoryOptions
-): ArrayFactoryValue<ObjectShape> {
+function createArrayFactory<
+    ObjectShape extends Record<string, AllowedObjectShapeValues>,
+    Options extends ArrayFactoryOptions
+>(factory: ObjectoryFactory<ObjectShape>, options?: Options): ArrayFactoryValue<
+    ObjectShape,
+    LengthForOptions<Options>
+> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the length is the literal the options carry
+    const length = (options?.length ?? 0) as LengthForOptions<Options>;
+
     return {
         factory,
-        length: options?.length ?? 0,
+        length,
         [arrayFactorySymbol]: true
     };
 }
 
+type BuildShape<ObjectShape extends Record<string, AllowedObjectShapeValues>> = (
+    overrides: OverrideRecord,
+    pathPrefix: string
+) => ObjectShape;
+
+function applyGenerator<ObjectShape extends Record<string, AllowedObjectShapeValues>>(
+    generatorFunction: GeneratorFunction<ObjectShape>,
+    overrides: OverrideRecord,
+    pathPrefix: string
+): ObjectShape {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- an override is a plain record
+    const generatedOverrides = overrides as Overrides<ShapeToGeneratorReturnValue<ObjectShape>>;
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- ok in this case
+    return applyOverrides(generatorFunction(), generatedOverrides, pathPrefix) as ObjectShape;
+}
+
 function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>>(
     generatorFunction: GeneratorFunction<ObjectShape>,
-    defaultOverrides: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>
+    defaultOverrides: OverrideRecord,
+    materializeShape: BuildShape<ObjectShape>
 ): ObjectoryFactory<ObjectShape> {
     const factory: ObjectoryFactory<ObjectShape> = {
-        build(overrides = {}) {
-            const generatedObject = generatorFunction();
-            const mergedOverrides = mergeOverrides(defaultOverrides, overrides);
+        build(overrides, options) {
+            const built = factory[buildAtPathSymbol](overrides ?? emptyOverrides(), '');
 
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- ok in this case
-            return applyOverrides(generatedObject, mergedOverrides) as ObjectShape;
+            return options?.freeze === true ? deepFreeze(built) : built;
+        },
+        [buildAtPathSymbol](overrides, pathPrefix) {
+            return materializeShape(mergeOverrides(defaultOverrides, overrides as OverrideRecord), pathPrefix);
         },
         asArray(options) {
             return createArrayFactory(factory, options);
         },
         withOverrides(overrides) {
-            const mergedOverrides = mergeOverrides(defaultOverrides, overrides);
+            const merged = mergeOverrides(defaultOverrides, overrides as OverrideRecord);
 
-            return instantiateFactory(generatorFunction, mergedOverrides);
+            return instantiateFactory(generatorFunction, merged, materializeShape);
         },
         extend<ExtendedObjectShape extends ObjectShape>(
             extensionGenerator: () => ShapeToGeneratorReturnValue<ExtensionShape<ObjectShape, ExtendedObjectShape>>
@@ -468,7 +499,7 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
             const extendedGeneratorFunction = function (): ShapeToGeneratorReturnValue<ExtendedObjectShape> {
                 const baseGenerated = generatorFunction();
                 const extensionGenerated = extensionGenerator();
-                const mergedGenerated: Record<string, AllowedGeneratorReturnShape> = {
+                const mergedGenerated: Readonly<Record<string, unknown>> = {
                     ...baseGenerated,
                     ...extensionGenerated
                 };
@@ -477,16 +508,24 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
                 return mergedGenerated as ShapeToGeneratorReturnValue<ExtendedObjectShape>;
             };
 
-            const extendedDefaultOverrides =
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- default overrides remain compatible when extending
-                defaultOverrides as Overrides<ShapeToGeneratorReturnValue<ExtendedObjectShape>>;
-
-            return instantiateFactory(extendedGeneratorFunction, extendedDefaultOverrides);
+            return instantiateFactory(
+                extendedGeneratorFunction,
+                defaultOverrides,
+                function materializeExtendedShape(overrides, pathPrefix) {
+                    return applyGenerator(extendedGeneratorFunction, overrides, pathPrefix);
+                }
+            );
         },
-        buildList({ length = 0 }: ArrayFactoryOptions = {}) {
-            return Array.from({ length }, function () {
-                return factory.build();
+        buildList<const Options extends BuildListOptions = Readonly<Record<string, never>>>(options?: Options) {
+            const length = options?.length ?? 0;
+            const shouldFreeze = options?.freeze === true;
+            const elements = Array.from({ length }, function () {
+                return factory.build(undefined, { freeze: shouldFreeze });
             });
+            const list = shouldFreeze ? deepFreeze(elements) : elements;
+
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the tuple length is the options literal
+            return list as ElementsForOptions<ObjectShape, Options>;
         },
         buildInvalidWithout(path) {
             const pathSegments = normalizePath(path);
@@ -513,13 +552,53 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
 }
 
 export function createFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>>(
-    generatorFunction: GeneratorFunction<ObjectShape>
+    generatorFunction: () => GeneratedShapeOrRejection<ObjectShape>
 ): ObjectoryFactory<ObjectShape>;
 export function createFactory<ObjectShape>(
-    generatorFunction: GeneratorFunction<ObjectShapeOf<ObjectShape>>
+    generatorFunction: () => GeneratedShapeOrRejection<ObjectShapeOf<ObjectShape>>
 ): ObjectoryFactory<ObjectShapeOf<ObjectShape>>;
 export function createFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>>(
     generatorFunction: GeneratorFunction<ObjectShape>
 ): ObjectoryFactory<ObjectShape> {
-    return instantiateFactory(generatorFunction, {});
+    return instantiateFactory(
+        generatorFunction,
+        {},
+        function materializeGeneratedShape(overrides, pathPrefix) {
+            return applyGenerator(generatorFunction, overrides, pathPrefix);
+        }
+    );
+}
+
+type AnyObjectoryFactory = ObjectoryFactory<Readonly<Record<string, AllowedObjectShapeValues>>>;
+
+export type VariantList = readonly [AnyObjectoryFactory, ...AnyObjectoryFactory[]];
+
+type ShapeBuiltBy<Variant> = Variant extends ObjectoryFactory<infer Shape> ? Shape : never;
+
+export type CoveredShape<Variants extends VariantList> = ShapeBuiltBy<Variants[number]>;
+
+export type DefaultVariantShape<Variants extends VariantList> = ShapeBuiltBy<Variants[0]>;
+
+export function createUnionFactory<const Variants extends VariantList>(
+    variants: Variants
+): ObjectoryFactory<CoveredShape<Variants>, CoveredShape<Variants> & DefaultVariantShape<Variants>> {
+    const selectVariant = createVariantSelector(variants, function variantDefaults(variant) {
+        return variant.build();
+    });
+
+    function materializeSelectedVariant(
+        overrides: Readonly<Record<string, unknown>>,
+        pathPrefix: string
+    ): CoveredShape<Variants> {
+        const variant = selectVariant(overrides);
+
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the selected variant builds a member of the union
+        return variant[buildAtPathSymbol](overrides as never, pathPrefix) as CoveredShape<Variants>;
+    }
+
+    function unsupportedGenerator(): never {
+        throw new TypeError('A union factory builds through its variants, so it has no generator of its own');
+    }
+
+    return instantiateFactory(unsupportedGenerator, {}, materializeSelectedVariant);
 }

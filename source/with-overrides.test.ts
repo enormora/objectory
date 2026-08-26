@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { createFactory } from './main.ts';
+import { createFactory, type ObjectoryFactory } from './main.ts';
 
 test('withOverrides() returns a factory with updated defaults', function () {
     const factory = createFactory<{ readonly foo: string; readonly count: number; }>(function () {
@@ -44,4 +44,57 @@ test('withOverrides() can be chained and still accepts build overrides', functio
     const actual = customized.build({ bar: 'override' });
 
     assert.deepStrictEqual(actual, { foo: 'custom', bar: 'override' });
+});
+
+type LayeredBase = { readonly label: string; readonly count: number; };
+type LayeredExtended = LayeredBase & { readonly extra: string; };
+
+function createLayeredBaseFactory(): ObjectoryFactory<LayeredBase> {
+    return createFactory<LayeredBase>(function () {
+        return { label: 'base', count: 1 };
+    });
+}
+
+test('withOverrides() applied before extend() keeps its value', function () {
+    const factory = createLayeredBaseFactory()
+        .withOverrides({ label: 'overridden' })
+        .extend<LayeredExtended>(function () {
+            return { extra: 'x' };
+        });
+
+    assert.deepStrictEqual(factory.build(), { label: 'overridden', count: 1, extra: 'x' });
+});
+
+test('withOverrides() applied after extend() keeps its value', function () {
+    const factory = createLayeredBaseFactory()
+        .extend<LayeredExtended>(function () {
+            return { extra: 'x' };
+        })
+        .withOverrides({ label: 'overridden' });
+
+    assert.deepStrictEqual(factory.build(), { label: 'overridden', count: 1, extra: 'x' });
+});
+
+test('an override wins over an extension that sets the same property, whatever the order', function () {
+    const overridesFirst = createLayeredBaseFactory()
+        .withOverrides({ label: 'from overrides' })
+        .extend<LayeredExtended>(function () {
+            return { extra: 'x', label: 'from extension' };
+        });
+    const extensionFirst = createLayeredBaseFactory()
+        .extend<LayeredExtended>(function () {
+            return { extra: 'x', label: 'from extension' };
+        })
+        .withOverrides({ label: 'from overrides' });
+
+    assert.strictEqual(overridesFirst.build().label, 'from overrides');
+    assert.strictEqual(extensionFirst.build().label, 'from overrides');
+});
+
+test('the later of two withOverrides() layers wins', function () {
+    const factory = createLayeredBaseFactory()
+        .withOverrides({ label: 'first' })
+        .withOverrides({ label: 'second' });
+
+    assert.strictEqual(factory.build().label, 'second');
 });
