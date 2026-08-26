@@ -1,5 +1,6 @@
 /* eslint-disable @stylistic/operator-linebreak, @stylistic/indent -- conflicts with dprint */
 import { addValueAtPath, normalizePath, removePropertyAtPath, setValueAtPath } from './path-operations.ts';
+import type { ElementsForOptions, LengthForOptions } from './array-lengths.ts';
 import { assertOverrideMatchesArrayProperty, assertOverrideMatchesNestedFactory } from './override-values.ts';
 import { isRecord } from './record.ts';
 
@@ -25,9 +26,6 @@ export type ArrayFactoryValue<
     readonly length: Length;
     readonly [arrayFactorySymbol]: true;
 };
-
-type LengthForOptions<Options extends ArrayFactoryOptions> = Options extends
-    { readonly length: infer Length extends number; } ? Length : 0;
 
 type MaterializableArrayFactory = {
     readonly factory: ObjectoryFactory<Readonly<Record<string, AllowedObjectShapeValues>>>;
@@ -60,7 +58,9 @@ export type ObjectoryFactory<ObjectShape extends Record<string, AllowedObjectSha
     readonly extend: <ExtendedObjectShape extends ObjectShape>(
         extensionGenerator: () => ShapeToGeneratorReturnValue<ExtensionShape<ObjectShape, ExtendedObjectShape>>
     ) => ObjectoryFactory<ExtendedObjectShape>;
-    readonly buildList: (options?: ArrayFactoryOptions) => readonly ObjectShape[];
+    readonly buildList: <const Options extends ArrayFactoryOptions = Readonly<Record<string, never>>>(
+        options?: Options
+    ) => ElementsForOptions<ObjectShape, Options>;
     readonly buildInvalidWithout: (path: string) => unknown;
     readonly buildInvalidWithChanged: (path: string, value: unknown) => unknown;
     readonly buildInvalidWithAdditional: (path: string, value: unknown) => unknown;
@@ -561,10 +561,14 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
 
             return instantiateFactory(extendedGeneratorFunction, extendedDefaultOverrides);
         },
-        buildList({ length = 0 }: ArrayFactoryOptions = {}) {
-            return Array.from({ length }, function () {
+        buildList<const Options extends ArrayFactoryOptions = Readonly<Record<string, never>>>(options?: Options) {
+            const length = options?.length ?? 0;
+            const elements = Array.from({ length }, function () {
                 return factory.build();
             });
+
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- the tuple length is the options literal
+            return elements as ElementsForOptions<ObjectShape, Options>;
         },
         buildInvalidWithout(path) {
             const pathSegments = normalizePath(path);
