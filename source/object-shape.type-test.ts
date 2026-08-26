@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'tstyche';
 import {
     createFactory,
+    createUnionFactory,
     type ArrayFactoryValue,
     type GeneratorFunction as ObjectoryGeneratorFunction
 } from './main.ts';
@@ -83,9 +84,10 @@ describe('object shapes accepted by createFactory()', function () {
         const singleVariantFactory = createFactory<VariantA>(function () {
             return { kind: 'a' };
         });
-        const unionFactory = createFactory<VariantA | VariantB>(function () {
-            return { kind: 'a' };
+        const variantBFactory = createFactory<VariantB>(function () {
+            return { kind: 'b' };
         });
+        const unionFactory = createUnionFactory([ singleVariantFactory, variantBFactory ]);
 
         expect(createFactory<UnionItemArrayShape>).type.toBeCallableWith(function () {
             return { items: unionFactory.asArray({ length: 1 }) };
@@ -183,10 +185,20 @@ describe('array element shapes accepted by createFactory()', function () {
 });
 
 describe('union shapes accepted by createFactory()', function () {
-    test('accepts a factory typed to the whole union for a union-typed property', function () {
-        const unionFactory = createFactory<VariantA | VariantB>(function () {
+    test('rejects a union shape and points at createUnionFactory()', function () {
+        expect(createFactory<VariantA | VariantB>).type.not.toBeCallableWith(function () {
             return { kind: 'a' };
         });
+    });
+
+    test('accepts a factory typed to the whole union for a union-typed property', function () {
+        const variantAFactory = createFactory<VariantA>(function () {
+            return { kind: 'a' };
+        });
+        const variantBFactory = createFactory<VariantB>(function () {
+            return { kind: 'b' };
+        });
+        const unionFactory = createUnionFactory([ variantAFactory, variantBFactory ]);
 
         expect(createFactory<NestedUnionShape>).type.toBeCallableWith(function () {
             return { variant: unionFactory };

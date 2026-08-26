@@ -49,3 +49,9 @@ export function emptyOverrides<ObjectShape extends AnyShape, DefaultShape extend
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- an empty override fits every branch
     return noOverrides as FactoryOverride<ObjectShape, DefaultShape>;
 }
+
+type UseCreateUnionFactory = 'objectory: this shape is a union of object types, use createUnionFactory() instead';
+
+export type GeneratedShapeOrRejection<ObjectShape extends AnyShape> = true extends IsUnion<ObjectShape>
+    ? UseCreateUnionFactory
+    : ShapeToGeneratorReturnValue<ObjectShape>;

@@ -8,7 +8,7 @@ import {
     normalizeOverride,
     type NormalizedOverride
 } from './override-wrapper.ts';
-import { emptyOverrides, type FactoryOverride } from './union-overrides.ts';
+import { emptyOverrides, type FactoryOverride, type GeneratedShapeOrRejection } from './union-overrides.ts';
 import {
     createVariantSelector,
     type CoveredShape,
@@ -565,10 +565,10 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
 }
 
 export function createFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>>(
-    generatorFunction: GeneratorFunction<ObjectShape>
+    generatorFunction: () => GeneratedShapeOrRejection<ObjectShape>
 ): ObjectoryFactory<ObjectShape>;
 export function createFactory<ObjectShape>(
-    generatorFunction: GeneratorFunction<ObjectShapeOf<ObjectShape>>
+    generatorFunction: () => GeneratedShapeOrRejection<ObjectShapeOf<ObjectShape>>
 ): ObjectoryFactory<ObjectShapeOf<ObjectShape>>;
 export function createFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>>(
     generatorFunction: GeneratorFunction<ObjectShape>
