@@ -169,6 +169,56 @@ function assertOverrideValueIsNotAFactory(value: unknown, path: string): void {
     }
 }
 
+function describeOverrideValue(value: unknown): string {
+    if (value === null) {
+        return 'null';
+    }
+
+    if (Array.isArray(value)) {
+        return 'an array';
+    }
+
+    if (value instanceof Date) {
+        return 'a Date';
+    }
+
+    if (isRecord(value)) {
+        return 'an object';
+    }
+
+    return `a ${typeof value}`;
+}
+
+function isOverrideRecord(value: unknown): value is Record<PropertyKey, unknown> {
+    if (!isRecord(value)) {
+        return false;
+    }
+
+    const prototype: unknown = Object.getPrototypeOf(value);
+
+    return prototype === Object.prototype || prototype === null;
+}
+
+function assertOverrideMatchesNestedFactory(value: unknown, path: string): void {
+    if (!isOverrideRecord(value)) {
+        throw new TypeError(
+            `Invalid override at "${path}": a nested factory takes an object of overrides, received ${
+                describeOverrideValue(value)
+            }`
+        );
+    }
+}
+
+function assertOverrideMatchesArrayProperty(value: unknown, path: string): void {
+    if (!Array.isArray(value)) {
+        throw new TypeError(
+            `Invalid override at "${path}": an array property takes an array of overrides, received ${
+                describeOverrideValue(value)
+            }`
+        );
+    }
+}
+
 function assertOverrideContainsNoFactories(value: unknown, path: string): unknown {
     assertOverrideValueIsNotAFactory(value, path);
 
@@ -332,18 +382,28 @@ function withMaterializedOverride(
 
 function materializeFactoryWithOverride(
     value: ObjectoryFactory<Record<string, AllowedObjectShapeValues>>,
-    override: NormalizedOverride
+    override: NormalizedOverride,
+    path: string
 ): AllowedObjectShapeValues {
     return withMaterializedOverride(override, function (resolved) {
+        if (resolved !== undefined) {
+            assertOverrideMatchesNestedFactory(resolved, path);
+        }
+
         return buildFactoryValue(value, resolved);
     });
 }
 
 function materializeArrayFactoryWithOverride(
     value: ArrayFactoryValue<Record<string, AllowedObjectShapeValues>>,
-    override: NormalizedOverride
+    override: NormalizedOverride,
+    path: string
 ): AllowedObjectShapeValues {
     return withMaterializedOverride(override, function (resolved) {
+        if (resolved !== undefined) {
+            assertOverrideMatchesArrayProperty(resolved, path);
+        }
+
         return materializeArrayFactoryValue(value, resolved);
     });
 }
@@ -355,6 +415,10 @@ function materializeTemplateWithOverride(
     path: string
 ): AllowedObjectShapeValues {
     return withMaterializedOverride(override, function (resolved) {
+        if (resolved !== undefined) {
+            assertOverrideMatchesArrayProperty(resolved, path);
+        }
+
         return materializeTemplateArray(value, resolved, resolve, path);
     });
 }
@@ -378,11 +442,11 @@ function materializeValue(
     const normalizedOverride = normalizeOverride(override);
 
     if (isFactory(value)) {
-        return materializeFactoryWithOverride(value, normalizedOverride);
+        return materializeFactoryWithOverride(value, normalizedOverride, path);
     }
 
     if (isArrayFactoryValue(value)) {
-        return materializeArrayFactoryWithOverride(value, normalizedOverride);
+        return materializeArrayFactoryWithOverride(value, normalizedOverride, path);
     }
 
     if (Array.isArray(value)) {
