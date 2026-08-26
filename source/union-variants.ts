@@ -8,6 +8,8 @@ type ShapeBuiltBy<Variant> = Variant extends ObjectoryFactory<infer Shape> ? Sha
 
 export type CoveredShape<Variants extends VariantList> = ShapeBuiltBy<Variants[number]>;
 
+export type DefaultVariantShape<Variants extends VariantList> = ShapeBuiltBy<Variants[0]>;
+
 type VariantDefaults = Readonly<Record<string, unknown>>;
 
 const noVariantMatched =

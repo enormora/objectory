@@ -1,13 +1,20 @@
 /* eslint-disable @stylistic/operator-linebreak, @stylistic/indent -- conflicts with dprint */
 import { addValueAtPath, normalizePath, removePropertyAtPath, setValueAtPath } from './path-operations.ts';
 import type { ElementsForOptions, LengthForOptions } from './array-lengths.ts';
+import type { ArrayFactoryOptions, BuildListOptions, BuildOptions } from './factory-options.ts';
 import {
     createOverrideWrapper,
     noOverrideMarker,
     normalizeOverride,
     type NormalizedOverride
 } from './override-wrapper.ts';
-import { createVariantSelector, type CoveredShape, type VariantList } from './union-variants.ts';
+import { emptyOverrides, type FactoryOverride } from './union-overrides.ts';
+import {
+    createVariantSelector,
+    type CoveredShape,
+    type DefaultVariantShape,
+    type VariantList
+} from './union-variants.ts';
 import {
     assertAllowedObjectShapeValue,
     assertObjectValueComesFromFactory,
@@ -20,16 +27,6 @@ import { isRecord } from './record.ts';
 const arrayFactorySymbol: unique symbol = Symbol('objectory.arrayFactory');
 const factorySymbol: unique symbol = Symbol('objectory.factory');
 const buildAtPathSymbol: unique symbol = Symbol('objectory.buildAtPath');
-export type ArrayFactoryOptions = {
-    readonly length?: number;
-};
-
-export type BuildOptions = {
-    readonly freeze?: boolean;
-};
-
-export type BuildListOptions = ArrayFactoryOptions & BuildOptions;
-
 export type ArrayFactoryValue<
     ObjectShape extends Record<string, AllowedObjectShapeValues>,
     Length extends number = number
@@ -57,22 +54,25 @@ export type Overrides<ObjectShape> = {
     readonly [P in keyof ObjectShape]?: OverridesHelper<ObjectShape[P]>;
 };
 
-export type OverridesHelper<T> = T extends ObjectoryFactory<infer U> ? Overrides<ShapeToGeneratorReturnValue<U>>
+export type OverridesHelper<T> = T extends ObjectoryFactory<infer U, infer D> ? FactoryOverride<U, D>
     : T extends ArrayFactoryValue<infer U> ? readonly (Overrides<ShapeToGeneratorReturnValue<U>> | undefined)[]
     : T extends readonly (infer U)[] ? readonly (OverridesHelper<U> | undefined)[]
     : T;
 
-export type ObjectoryFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>> = {
+export type ObjectoryFactory<
+    ObjectShape extends Record<string, AllowedObjectShapeValues>,
+    DefaultShape extends ObjectShape = ObjectShape
+> = {
     readonly build: (
-        overrides?: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>,
+        overrides?: FactoryOverride<ObjectShape, DefaultShape>,
         options?: BuildOptions
     ) => ObjectShape;
     readonly asArray: <const Options extends ArrayFactoryOptions = Readonly<Record<string, never>>>(
         options?: Options
     ) => ArrayFactoryValue<ObjectShape, LengthForOptions<Options>>;
     readonly withOverrides: (
-        overrides: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>
-    ) => ObjectoryFactory<ObjectShape>;
+        overrides: FactoryOverride<ObjectShape, DefaultShape>
+    ) => ObjectoryFactory<ObjectShape, DefaultShape>;
     readonly extend: <ExtendedObjectShape extends ObjectShape>(
         extensionGenerator: () => ShapeToGeneratorReturnValue<ExtensionShape<ObjectShape, ExtendedObjectShape>>
     ) => ObjectoryFactory<ExtendedObjectShape>;
@@ -83,7 +83,7 @@ export type ObjectoryFactory<ObjectShape extends Record<string, AllowedObjectSha
     readonly buildInvalidWithChanged: (path: string, value: unknown) => unknown;
     readonly buildInvalidWithAdditional: (path: string, value: unknown) => unknown;
     readonly [buildAtPathSymbol]: (
-        overrides: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>,
+        overrides: FactoryOverride<ObjectShape, DefaultShape>,
         pathPrefix: string
     ) => ObjectShape;
     readonly [factorySymbol]: true;
@@ -485,7 +485,7 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
 ): ObjectoryFactory<ObjectShape> {
     const factory: ObjectoryFactory<ObjectShape> = {
         build(overrides, options) {
-            const built = factory[buildAtPathSymbol](overrides ?? {}, '');
+            const built = factory[buildAtPathSymbol](overrides ?? emptyOverrides<ObjectShape, ObjectShape>(), '');
 
             return options?.freeze === true ? deepFreeze(built) : built;
         },
@@ -533,7 +533,7 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
             const length = options?.length ?? 0;
             const shouldFreeze = options?.freeze === true;
             const elements = Array.from({ length }, function () {
-                return factory.build({}, { freeze: shouldFreeze });
+                return factory.build(emptyOverrides<ObjectShape, ObjectShape>(), { freeze: shouldFreeze });
             });
             const list = shouldFreeze ? deepFreeze(elements) : elements;
 
@@ -573,14 +573,18 @@ export function createFactory<ObjectShape>(
 export function createFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>>(
     generatorFunction: GeneratorFunction<ObjectShape>
 ): ObjectoryFactory<ObjectShape> {
-    return instantiateFactory(generatorFunction, {}, function materializeGeneratedShape(overrides, pathPrefix) {
-        return applyGenerator(generatorFunction, overrides, pathPrefix);
-    });
+    return instantiateFactory(
+        generatorFunction,
+        emptyOverrides(),
+        function materializeGeneratedShape(overrides, pathPrefix) {
+            return applyGenerator(generatorFunction, overrides, pathPrefix);
+        }
+    );
 }
 
 export function createUnionFactory<const Variants extends VariantList>(
     variants: Variants
-): ObjectoryFactory<CoveredShape<Variants>> {
+): ObjectoryFactory<CoveredShape<Variants>, CoveredShape<Variants> & DefaultVariantShape<Variants>> {
     const selectVariant = createVariantSelector(variants, function variantDefaults(variant) {
         return variant.build();
     });
