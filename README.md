@@ -187,10 +187,20 @@ Reach for `extend` only when the type changes. Everything else is `withOverrides
 | Result type                               | the same shape  | the extended shape         |
 | Needs a type argument                     | no              | yes                        |
 | Can add a property the type does not have | no              | yes                        |
-| Later layer wins                          | yes             | yes                        |
+| Layers with itself                        | later one wins  | later one wins             |
 
 An extension may also give a base property a different default, but a value change is what `withOverrides` is for, so
-prefer it. See [Composing factories](#composing-factories).
+prefer it. If both set the same property, **the override wins whichever order they were applied in**, because an
+extension contributes a generator value and overrides are applied on top of whatever the generator produced:
+
+```ts
+baseFactory
+    .withOverrides({ label: 'from overrides' })
+    .extend<Extended>(() => ({ extra: 'x', label: 'from extension' }))
+    .build(); // label is 'from overrides'
+```
+
+See [Composing factories](#composing-factories).
 
 ### Paths in the `buildInvalid*` methods
 
