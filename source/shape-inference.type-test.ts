@@ -21,12 +21,24 @@ describe('object shapes inferred from the generator function', function () {
     test('resolves a nested factory to the shape it builds', function () {
         const factory = createFactory(function () {
             return {
-                nested: createFactory(function () {
+                nested: createFactory<{ readonly kind: string; }>(function () {
                     return { kind: 'a' };
                 })
             };
         });
 
         expect(factory.build().nested.kind).type.toBe<string>();
+    });
+
+    test('keeps the literal type of a nested factory that was not given a type argument', function () {
+        const factory = createFactory(function () {
+            return {
+                nested: createFactory(function () {
+                    return { kind: 'a' };
+                })
+            };
+        });
+
+        expect(factory.build().nested.kind).type.toBe<'a'>();
     });
 });

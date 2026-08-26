@@ -61,8 +61,12 @@ const httpRequestFactory = createUnionFactory([ getRequestFactory, postRequestFa
 ```
 
 `createFactory` rejects a union of object shapes and points here, because a factory built from a single generator has no
-other variant to build, so a switch could only merge and leave the previous variant's keys behind. See
-[Discriminated unions](#discriminated-unions).
+other variant to build, so a switch could only merge and leave the previous variant's keys behind. A property typed by a
+union needs a union factory for the same reason. See [Discriminated unions](#discriminated-unions).
+
+Always give `createFactory` its type argument. The shape is what the factory is for, and inferring it from the generator
+gives narrower types than a fixture wants: a nested factory declared without one keeps its literal types, so its
+properties stop accepting other values.
 
 ### `factory.build(overrides?)`
 
@@ -473,8 +477,9 @@ monitorFactory.build({ request: { method: 'POST' } });
 // { name: 'monitor', request: { method: 'POST', url: 'https://example.com', retries: 3, body: '{}' } }
 ```
 
-A single-variant factory is also valid there when a fixture wants that variant pinned. It cannot switch, because only a
-union factory knows the other variants.
+A union-typed property needs a **union** factory, not one pinned to a single variant. Only a union factory knows the other
+variants, so only it can honour a switch; a pinned one would have to merge and leave the previous variant's keys behind.
+To pin a variant for a fixture, put it first in `createUnionFactory` so it is the default.
 
 ## Troubleshooting
 

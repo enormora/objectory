@@ -8,7 +8,12 @@ import {
     normalizeOverride,
     type NormalizedOverride
 } from './override-wrapper.ts';
-import { emptyOverrides, type FactoryOverride, type GeneratedShapeOrRejection } from './union-overrides.ts';
+import {
+    emptyOverrides,
+    type FactoryOverride,
+    type GeneratedShapeOrRejection,
+    type IsUnion
+} from './union-overrides.ts';
 import {
     createVariantSelector,
     type CoveredShape,
@@ -116,9 +121,15 @@ type TupleArrayFactory<TupleShape extends { readonly length: number; }> = TupleS
         : never)
     : never;
 
-type WholeShapeFactory<T> = [T] extends [readonly unknown[]] ? never
-    : [T] extends [Record<string, AllowedObjectShapeValues>] ? ObjectoryFactory<T>
+type ShapePart<T> = Exclude<T, null | undefined>;
+
+type WholeShapeFactory<T> = [ShapePart<T>] extends [readonly unknown[]] ? never
+    : [ShapePart<T>] extends [Record<string, AllowedObjectShapeValues>]
+        ? Extract<T, null | undefined> | ObjectoryFactory<ShapePart<T>>
     : never;
+
+type NonObjectGeneratorValue<T> = T extends Record<string, AllowedObjectShapeValues> ? never
+    : DistributedShapeToGeneratorReturnValue<T>;
 
 type DistributedShapeToGeneratorReturnValue<T> = T extends readonly (infer ItemShape)[]
     ? number extends T['length']
@@ -131,8 +142,12 @@ export type ShapeToGeneratorReturnValueHelper<T> =
     | DistributedShapeToGeneratorReturnValue<T>
     | WholeShapeFactory<T>;
 
+type PropertyGeneratorValue<Value> = true extends IsUnion<ShapePart<Value>>
+    ? NonObjectGeneratorValue<Value> | WholeShapeFactory<Value>
+    : ShapeToGeneratorReturnValueHelper<Value>;
+
 export type ShapeToGeneratorReturnValue<T extends Record<string, AllowedObjectShapeValues>> = {
-    readonly [P in keyof T]: ShapeToGeneratorReturnValueHelper<T[P]>;
+    readonly [P in keyof T]: PropertyGeneratorValue<T[P]>;
 };
 
 type GeneratedObjectToShape<T> = {
@@ -433,10 +448,9 @@ function applyOverrides<GeneratedObject extends Readonly<Record<string, unknown>
     return Object.fromEntries(entries) as GeneratedObjectToShape<GeneratedObject>;
 }
 
-function mergeOverrides<GeneratedObject>(
-    base: Overrides<GeneratedObject>,
-    extension: Overrides<GeneratedObject>
-): Overrides<GeneratedObject> {
+type OverrideRecord = Readonly<Record<string, unknown>>;
+
+function mergeOverrides(base: OverrideRecord, extension: OverrideRecord): OverrideRecord {
     return { ...base, ...extension };
 }
 
@@ -458,42 +472,43 @@ function createArrayFactory<
 }
 
 type BuildShape<ObjectShape extends Record<string, AllowedObjectShapeValues>> = (
-    overrides: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>,
+    overrides: OverrideRecord,
     pathPrefix: string
 ) => ObjectShape;
 
 function applyGenerator<ObjectShape extends Record<string, AllowedObjectShapeValues>>(
     generatorFunction: GeneratorFunction<ObjectShape>,
-    overrides: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>,
+    overrides: OverrideRecord,
     pathPrefix: string
 ): ObjectShape {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- an override is a plain record
+    const generatedOverrides = overrides as Overrides<ShapeToGeneratorReturnValue<ObjectShape>>;
+
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- ok in this case
-    return applyOverrides(generatorFunction(), overrides, pathPrefix) as ObjectShape;
+    return applyOverrides(generatorFunction(), generatedOverrides, pathPrefix) as ObjectShape;
 }
 
 function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShapeValues>>(
     generatorFunction: GeneratorFunction<ObjectShape>,
-    defaultOverrides: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>,
+    defaultOverrides: OverrideRecord,
     materializeShape: BuildShape<ObjectShape>
 ): ObjectoryFactory<ObjectShape> {
     const factory: ObjectoryFactory<ObjectShape> = {
         build(overrides, options) {
-            const built = factory[buildAtPathSymbol](overrides ?? emptyOverrides<ObjectShape, ObjectShape>(), '');
+            const built = factory[buildAtPathSymbol](overrides ?? emptyOverrides(), '');
 
             return options?.freeze === true ? deepFreeze(built) : built;
         },
         [buildAtPathSymbol](overrides, pathPrefix) {
-            const mergedOverrides = mergeOverrides(defaultOverrides, overrides);
-
-            return materializeShape(mergedOverrides, pathPrefix);
+            return materializeShape(mergeOverrides(defaultOverrides, overrides as OverrideRecord), pathPrefix);
         },
         asArray(options) {
             return createArrayFactory(factory, options);
         },
         withOverrides(overrides) {
-            const mergedOverrides = mergeOverrides(defaultOverrides, overrides);
+            const merged = mergeOverrides(defaultOverrides, overrides as OverrideRecord);
 
-            return instantiateFactory(generatorFunction, mergedOverrides, materializeShape);
+            return instantiateFactory(generatorFunction, merged, materializeShape);
         },
         extend<ExtendedObjectShape extends ObjectShape>(
             extensionGenerator: () => ShapeToGeneratorReturnValue<ExtensionShape<ObjectShape, ExtendedObjectShape>>
@@ -510,13 +525,9 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
                 return mergedGenerated as ShapeToGeneratorReturnValue<ExtendedObjectShape>;
             };
 
-            const extendedDefaultOverrides =
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- default overrides remain compatible when extending
-                defaultOverrides as Overrides<ShapeToGeneratorReturnValue<ExtendedObjectShape>>;
-
             return instantiateFactory(
                 extendedGeneratorFunction,
-                extendedDefaultOverrides,
+                defaultOverrides,
                 function materializeExtendedShape(overrides, pathPrefix) {
                     return applyGenerator(extendedGeneratorFunction, overrides, pathPrefix);
                 }
@@ -526,7 +537,7 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
             const length = options?.length ?? 0;
             const shouldFreeze = options?.freeze === true;
             const elements = Array.from({ length }, function () {
-                return factory.build(emptyOverrides<ObjectShape, ObjectShape>(), { freeze: shouldFreeze });
+                return factory.build(undefined, { freeze: shouldFreeze });
             });
             const list = shouldFreeze ? deepFreeze(elements) : elements;
 
@@ -568,7 +579,7 @@ export function createFactory<ObjectShape extends Record<string, AllowedObjectSh
 ): ObjectoryFactory<ObjectShape> {
     return instantiateFactory(
         generatorFunction,
-        emptyOverrides(),
+        {},
         function materializeGeneratedShape(overrides, pathPrefix) {
             return applyGenerator(generatorFunction, overrides, pathPrefix);
         }
@@ -583,7 +594,7 @@ export function createUnionFactory<const Variants extends VariantList>(
     });
 
     function materializeSelectedVariant(
-        overrides: Overrides<ShapeToGeneratorReturnValue<CoveredShape<Variants>>>,
+        overrides: Readonly<Record<string, unknown>>,
         pathPrefix: string
     ): CoveredShape<Variants> {
         const variant = selectVariant(overrides);

@@ -152,3 +152,19 @@ test('createUnionFactory() works as an array factory item', function () {
         { id: 'a-1', title: 'Draft', state: 'published', publishedAt: '2026-01-01' }
     ]);
 });
+
+test('createUnionFactory() is what a union-typed property needs, so a switch never merges', function () {
+    const blogFactory = createFactory<{ readonly slug: string; readonly article: Draft | Published; }>(function () {
+        return { slug: 'a-blog', article: articleFactory };
+    });
+
+    const built = blogFactory.build({ article: { state: 'published', publishedAt: 'now' } });
+
+    assert.deepStrictEqual(built.article, {
+        id: 'a-1',
+        title: 'Draft',
+        state: 'published',
+        publishedAt: 'now'
+    });
+    assert.strictEqual(Object.hasOwn(built.article, 'editorNote'), false);
+});

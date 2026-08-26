@@ -205,12 +205,12 @@ describe('union shapes accepted by createFactory()', function () {
         });
     });
 
-    test('accepts a factory typed to one variant for a union-typed property', function () {
+    test('rejects a factory pinned to one variant for a union-typed property', function () {
         const variantAFactory = createFactory<VariantA>(function () {
             return { kind: 'a' };
         });
 
-        expect(createFactory<NestedUnionShape>).type.toBeCallableWith(function () {
+        expect(createFactory<NestedUnionShape>).type.not.toBeCallableWith(function () {
             return { variant: variantAFactory };
         });
     });
