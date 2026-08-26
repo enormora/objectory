@@ -78,7 +78,7 @@ describe('object shapes accepted by createFactory()', function () {
         });
     });
 
-    test('requires an array factory covering every item shape of a union', function () {
+    test('accepts an array factory for one variant of a union item shape', function () {
         const singleVariantFactory = createFactory<VariantA>(function () {
             return { kind: 'a' };
         });
@@ -89,10 +89,13 @@ describe('object shapes accepted by createFactory()', function () {
         expect(createFactory<UnionItemArrayShape>).type.toBeCallableWith(function () {
             return { items: unionFactory.asArray({ length: 1 }) };
         });
-        expect(singleVariantFactory.asArray({ length: 1 })).type.not.toBeAssignableTo<
+        expect(createFactory<UnionItemArrayShape>).type.toBeCallableWith(function () {
+            return { items: singleVariantFactory.asArray({ length: 1 }) };
+        });
+        expect(singleVariantFactory.asArray({ length: 1 })).type.toBeAssignableTo<
             ArrayFactoryValue<VariantA | VariantB>
         >();
-        expect<SingleVariantArrayGenerator>().type.not.toBeAssignableTo<
+        expect<SingleVariantArrayGenerator>().type.toBeAssignableTo<
             ObjectoryGeneratorFunction<UnionItemArrayShape>
         >();
     });
@@ -139,6 +142,18 @@ describe('object shapes accepted by createFactory()', function () {
 });
 
 describe('array element shapes accepted by createFactory()', function () {
+    test('accepts a plain array mixing factories for different variants of a union item shape', function () {
+        const variantAFactory = createFactory<VariantA>(function () {
+            return { kind: 'a' };
+        });
+        const variantBFactory = createFactory<VariantB>(function () {
+            return { kind: 'b' };
+        });
+
+        expect(createFactory<UnionItemArrayShape>).type.toBeCallableWith(function () {
+            return { items: [ variantAFactory, variantBFactory ] };
+        });
+    });
     test('accepts a plain array of factories with differing defaults', function () {
         const janeFactory = createFactory<PersonShape>(function () {
             return { name: 'Jane Doe', age: 32 };

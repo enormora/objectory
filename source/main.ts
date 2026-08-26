@@ -13,7 +13,16 @@ export type ArrayFactoryOptions = {
 };
 
 export type ArrayFactoryValue<ObjectShape extends Record<string, AllowedObjectShapeValues>> = {
-    readonly factory: ObjectoryFactory<ObjectShape>;
+    readonly factory: {
+        readonly build: (overrides?: never) => ObjectShape;
+        readonly [factorySymbol]: true;
+    };
+    readonly length: number;
+    readonly [arrayFactorySymbol]: true;
+};
+
+type MaterializableArrayFactory = {
+    readonly factory: ObjectoryFactory<Readonly<Record<string, AllowedObjectShapeValues>>>;
     readonly length: number;
     readonly [arrayFactorySymbol]: true;
 };
@@ -113,7 +122,7 @@ function isFactory<T extends Record<string, AllowedObjectShapeValues>>(value: un
     return isRecord(value) && value[factorySymbol] === true;
 }
 
-function isArrayFactoryValue(value: unknown): value is ArrayFactoryValue<Record<string, AllowedObjectShapeValues>> {
+function isArrayFactoryValue(value: unknown): value is MaterializableArrayFactory {
     if (!isRecord(value)) {
         return false;
     }
@@ -300,7 +309,7 @@ function normalizeOverride(override: unknown): NormalizedOverride {
 }
 
 function materializeArrayFactoryValue(
-    arrayFactory: ArrayFactoryValue<Record<string, AllowedObjectShapeValues>>,
+    arrayFactory: MaterializableArrayFactory,
     override: unknown
 ): AllowedObjectShapeValues {
     const overrideArray: readonly unknown[] | undefined = Array.isArray(override) ? override : undefined;
@@ -395,7 +404,7 @@ function materializeFactoryWithOverride(
 }
 
 function materializeArrayFactoryWithOverride(
-    value: ArrayFactoryValue<Record<string, AllowedObjectShapeValues>>,
+    value: MaterializableArrayFactory,
     override: NormalizedOverride,
     path: string
 ): AllowedObjectShapeValues {
