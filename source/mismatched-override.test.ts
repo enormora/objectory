@@ -98,3 +98,25 @@ test('build() throws when withOverrides() carries a mismatched override kind', f
         return bicycleFactory.withOverrides({ frontWheel: 'oops' }).build();
     }, { name: 'TypeError', message: `Invalid override at "frontWheel": ${nestedFactoryMessage} a string` });
 });
+
+test('build() names the path from the root when a nested override has the wrong kind', function () {
+    type Frame = { readonly wheel: Wheel; };
+    const frameFactory = createFactory<Frame>(function () {
+        return { wheel: wheelFactory };
+    });
+    const factory = createFactory<{ readonly frame: Frame; }>(function () {
+        return { frame: frameFactory };
+    });
+
+    assert.throws(function () {
+        // @ts-expect-error -- consumers can bypass the invalid override with a type assertion
+        return factory.build({ frame: { wheel: 'oops' } });
+    }, { name: 'TypeError', message: `Invalid override at "frame.wheel": ${nestedFactoryMessage} a string` });
+});
+
+test('build() throws when an element of an array factory override has the wrong kind', function () {
+    assert.throws(function () {
+        // @ts-expect-error -- consumers can bypass the invalid override with a type assertion
+        return bicycleFactory.build({ spareWheels: [ { diameter: 26 }, 'oops' ] });
+    }, { name: 'TypeError', message: `Invalid override at "spareWheels.1": ${nestedFactoryMessage} a string` });
+});

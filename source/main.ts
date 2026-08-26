@@ -1,11 +1,13 @@
 /* eslint-disable @stylistic/operator-linebreak, @stylistic/indent -- conflicts with dprint */
 import { addValueAtPath, normalizePath, removePropertyAtPath, setValueAtPath } from './path-operations.ts';
+import { assertOverrideMatchesArrayProperty, assertOverrideMatchesNestedFactory } from './override-values.ts';
 import { isRecord } from './record.ts';
 
 const arrayFactorySymbol: unique symbol = Symbol('objectory.arrayFactory');
 const factorySymbol: unique symbol = Symbol('objectory.factory');
 const noOverrideSymbol: unique symbol = Symbol('objectory.noOverride');
 const overrideWrapperSymbol: unique symbol = Symbol('objectory.overrideWrapper');
+const buildAtPathSymbol: unique symbol = Symbol('objectory.buildAtPath');
 const primitiveAllowedTypes = new Set([ 'string', 'number', 'boolean', 'bigint', 'symbol', 'function' ]);
 
 export type ArrayFactoryOptions = {
@@ -54,6 +56,10 @@ export type ObjectoryFactory<ObjectShape extends Record<string, AllowedObjectSha
     readonly buildInvalidWithout: (path: string) => unknown;
     readonly buildInvalidWithChanged: (path: string, value: unknown) => unknown;
     readonly buildInvalidWithAdditional: (path: string, value: unknown) => unknown;
+    readonly [buildAtPathSymbol]: (
+        overrides: Overrides<ShapeToGeneratorReturnValue<ObjectShape>>,
+        pathPrefix: string
+    ) => ObjectShape;
     readonly [factorySymbol]: true;
 };
 
@@ -178,56 +184,6 @@ function assertOverrideValueIsNotAFactory(value: unknown, path: string): void {
     }
 }
 
-function describeOverrideValue(value: unknown): string {
-    if (value === null) {
-        return 'null';
-    }
-
-    if (Array.isArray(value)) {
-        return 'an array';
-    }
-
-    if (value instanceof Date) {
-        return 'a Date';
-    }
-
-    if (isRecord(value)) {
-        return 'an object';
-    }
-
-    return `a ${typeof value}`;
-}
-
-function isOverrideRecord(value: unknown): value is Record<PropertyKey, unknown> {
-    if (!isRecord(value)) {
-        return false;
-    }
-
-    const prototype: unknown = Object.getPrototypeOf(value);
-
-    return prototype === Object.prototype || prototype === null;
-}
-
-function assertOverrideMatchesNestedFactory(value: unknown, path: string): void {
-    if (!isOverrideRecord(value)) {
-        throw new TypeError(
-            `Invalid override at "${path}": a nested factory takes an object of overrides, received ${
-                describeOverrideValue(value)
-            }`
-        );
-    }
-}
-
-function assertOverrideMatchesArrayProperty(value: unknown, path: string): void {
-    if (!Array.isArray(value)) {
-        throw new TypeError(
-            `Invalid override at "${path}": an array property takes an array of overrides, received ${
-                describeOverrideValue(value)
-            }`
-        );
-    }
-}
-
 function assertOverrideContainsNoFactories(value: unknown, path: string): unknown {
     assertOverrideValueIsNotAFactory(value, path);
 
@@ -277,6 +233,22 @@ function isOverridesForFactory<F extends ObjectoryFactory<Record<string, Allowed
     return override === undefined || isAllowedOverrideValue(override);
 }
 
+function joinPath(pathPrefix: string, segment: string): string {
+    return pathPrefix === '' ? segment : `${pathPrefix}.${segment}`;
+}
+
+type ValuePath = {
+    readonly withinFactory: string;
+    readonly fromRoot: string;
+};
+
+function childPath(parent: ValuePath, segment: string): ValuePath {
+    return {
+        withinFactory: joinPath(parent.withinFactory, segment),
+        fromRoot: joinPath(parent.fromRoot, segment)
+    };
+}
+
 function createOverrideWrapper(value: unknown): OverrideWrapper {
     return {
         value,
@@ -310,36 +282,43 @@ function normalizeOverride(override: unknown): NormalizedOverride {
 
 function materializeArrayFactoryValue(
     arrayFactory: MaterializableArrayFactory,
-    override: unknown
+    override: unknown,
+    path: ValuePath
 ): AllowedObjectShapeValues {
     const overrideArray: readonly unknown[] | undefined = Array.isArray(override) ? override : undefined;
     const length = overrideArray?.length ?? arrayFactory.length;
 
     return Array.from({ length }, function (_unused, index) {
         const itemOverride = overrideArray?.[index];
+        const itemPath = joinPath(path.fromRoot, index.toString());
+
+        if (itemOverride !== undefined) {
+            assertOverrideMatchesNestedFactory(itemOverride, itemPath);
+        }
 
         if (!isOverridesForFactory(arrayFactory.factory, itemOverride)) {
             throw new TypeError('Invalid override value provided for array factory item');
         }
 
         if (itemOverride === undefined) {
-            return arrayFactory.factory.build();
+            return arrayFactory.factory[buildAtPathSymbol]({}, itemPath);
         }
 
-        return arrayFactory.factory.build(itemOverride);
+        return arrayFactory.factory[buildAtPathSymbol](itemOverride, itemPath);
     });
 }
 
 function buildFactoryValue(
     factory: ObjectoryFactory<Record<string, AllowedObjectShapeValues>>,
-    override: unknown
+    override: unknown,
+    pathPrefix: string
 ): AllowedObjectShapeValues {
     if (isOverridesForFactory(factory, override)) {
         if (override === undefined) {
-            return factory.build();
+            return factory[buildAtPathSymbol]({}, pathPrefix);
         }
 
-        return factory.build(override);
+        return factory[buildAtPathSymbol](override, pathPrefix);
     }
 
     throw new TypeError('Invalid override value provided for nested factory');
@@ -348,21 +327,21 @@ function buildFactoryValue(
 type TemplateItemResolver = (
     value: AllowedGeneratorReturnShape,
     overrideValue: unknown,
-    path: string
+    path: ValuePath
 ) => AllowedObjectShapeValues;
 
 function materializeTemplateArray(
     template: readonly AllowedGeneratorReturnShape[],
     override: unknown,
     resolve: TemplateItemResolver,
-    path: string
+    path: ValuePath
 ): AllowedObjectShapeValues {
     if (Array.isArray(override)) {
         return override.map(function (item, index) {
             const templateItem = template[index];
 
             if (templateItem !== undefined) {
-                return resolve(templateItem, item, `${path}.${index}`);
+                return resolve(templateItem, item, childPath(path, index.toString()));
             }
 
             return assertAllowedObjectShapeValue(item);
@@ -370,7 +349,7 @@ function materializeTemplateArray(
     }
 
     return template.map(function (item, index) {
-        return resolve(item, undefined, `${path}.${index}`);
+        return resolve(item, undefined, childPath(path, index.toString()));
     });
 }
 
@@ -392,28 +371,28 @@ function withMaterializedOverride(
 function materializeFactoryWithOverride(
     value: ObjectoryFactory<Record<string, AllowedObjectShapeValues>>,
     override: NormalizedOverride,
-    path: string
+    path: ValuePath
 ): AllowedObjectShapeValues {
     return withMaterializedOverride(override, function (resolved) {
         if (resolved !== undefined) {
-            assertOverrideMatchesNestedFactory(resolved, path);
+            assertOverrideMatchesNestedFactory(resolved, path.fromRoot);
         }
 
-        return buildFactoryValue(value, resolved);
+        return buildFactoryValue(value, resolved, path.fromRoot);
     });
 }
 
 function materializeArrayFactoryWithOverride(
     value: MaterializableArrayFactory,
     override: NormalizedOverride,
-    path: string
+    path: ValuePath
 ): AllowedObjectShapeValues {
     return withMaterializedOverride(override, function (resolved) {
         if (resolved !== undefined) {
-            assertOverrideMatchesArrayProperty(resolved, path);
+            assertOverrideMatchesArrayProperty(resolved, path.fromRoot);
         }
 
-        return materializeArrayFactoryValue(value, resolved);
+        return materializeArrayFactoryValue(value, resolved, path);
     });
 }
 
@@ -421,11 +400,11 @@ function materializeTemplateWithOverride(
     value: readonly AllowedGeneratorReturnShape[],
     override: NormalizedOverride,
     resolve: TemplateItemResolver,
-    path: string
+    path: ValuePath
 ): AllowedObjectShapeValues {
     return withMaterializedOverride(override, function (resolved) {
         if (resolved !== undefined) {
-            assertOverrideMatchesArrayProperty(resolved, path);
+            assertOverrideMatchesArrayProperty(resolved, path.fromRoot);
         }
 
         return materializeTemplateArray(value, resolved, resolve, path);
@@ -446,7 +425,7 @@ function materializeLeafValue(
 function materializeValue(
     value: AllowedGeneratorReturnShape,
     override: unknown,
-    path: string
+    path: ValuePath
 ): AllowedObjectShapeValues {
     const normalizedOverride = normalizeOverride(override);
 
@@ -462,14 +441,15 @@ function materializeValue(
         return materializeTemplateWithOverride(value, normalizedOverride, materializeValue, path);
     }
 
-    assertObjectValueComesFromFactory(value, path);
+    assertObjectValueComesFromFactory(value, path.withinFactory);
 
     return materializeLeafValue(value, normalizedOverride);
 }
 
 function applyOverrides<GeneratedObject extends Record<string, AllowedGeneratorReturnShape>>(
     generatedObject: GeneratedObject,
-    overrides: Overrides<GeneratedObject>
+    overrides: Overrides<GeneratedObject>,
+    pathPrefix: string
 ): GeneratedObjectToShape<GeneratedObject> {
     const keys = new Set<keyof GeneratedObject>([
         ...(Object.keys(generatedObject) as (keyof GeneratedObject)[]),
@@ -480,11 +460,15 @@ function applyOverrides<GeneratedObject extends Record<string, AllowedGeneratorR
 
     for (const key of keys) {
         const value = generatedObject[key];
+        const path: ValuePath = {
+            withinFactory: String(key),
+            fromRoot: joinPath(pathPrefix, String(key))
+        };
         const hasOverride = Object.hasOwn(overrides, key);
         const overrideValue = hasOverride
-            ? createOverrideWrapper(assertOverrideContainsNoFactories(overrides[key], String(key)))
+            ? createOverrideWrapper(assertOverrideContainsNoFactories(overrides[key], path.fromRoot))
             : noOverrideSymbol;
-        const materialized = materializeValue(value, overrideValue, String(key));
+        const materialized = materializeValue(value, overrideValue, path);
 
         // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- ok in this case
         entries.push([ key, materialized as GeneratedObjectToShapeHelper<GeneratedObject[typeof key]> ]);
@@ -518,11 +502,14 @@ function instantiateFactory<ObjectShape extends Record<string, AllowedObjectShap
 ): ObjectoryFactory<ObjectShape> {
     const factory: ObjectoryFactory<ObjectShape> = {
         build(overrides = {}) {
+            return factory[buildAtPathSymbol](overrides, '');
+        },
+        [buildAtPathSymbol](overrides, pathPrefix) {
             const generatedObject = generatorFunction();
             const mergedOverrides = mergeOverrides(defaultOverrides, overrides);
 
             // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- ok in this case
-            return applyOverrides(generatedObject, mergedOverrides) as ObjectShape;
+            return applyOverrides(generatedObject, mergedOverrides, pathPrefix) as ObjectShape;
         },
         asArray(options) {
             return createArrayFactory(factory, options);
