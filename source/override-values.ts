@@ -49,3 +49,23 @@ export function assertOverrideMatchesArrayProperty(value: unknown, path: string)
         );
     }
 }
+
+export type ValuePath = {
+    readonly withinFactory: string;
+    readonly fromRoot: string;
+};
+
+export function joinPath(pathPrefix: string, segment: string): string {
+    return pathPrefix === '' ? segment : `${pathPrefix}.${segment}`;
+}
+
+export function rootPath(pathPrefix: string, key: string): ValuePath {
+    return { withinFactory: key, fromRoot: joinPath(pathPrefix, key) };
+}
+
+export function childPath(parent: ValuePath, segment: string): ValuePath {
+    return {
+        withinFactory: joinPath(parent.withinFactory, segment),
+        fromRoot: joinPath(parent.fromRoot, segment)
+    };
+}

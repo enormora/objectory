@@ -21,7 +21,14 @@ import {
     isAllowedObjectShapeValue
 } from './object-shape-values.ts';
 import { deepFreeze } from './deep-freeze.ts';
-import { assertOverrideMatchesArrayProperty, assertOverrideMatchesNestedFactory } from './override-values.ts';
+import {
+    assertOverrideMatchesArrayProperty,
+    assertOverrideMatchesNestedFactory,
+    childPath,
+    joinPath,
+    rootPath,
+    type ValuePath
+} from './override-values.ts';
 import { isRecord } from './record.ts';
 
 const arrayFactorySymbol: unique symbol = Symbol('objectory.arrayFactory');
@@ -54,10 +61,15 @@ export type Overrides<ObjectShape> = {
     readonly [P in keyof ObjectShape]?: OverridesHelper<ObjectShape[P]>;
 };
 
-export type OverridesHelper<T> = T extends ObjectoryFactory<infer U, infer D> ? FactoryOverride<U, D>
-    : T extends ArrayFactoryValue<infer U> ? readonly (Overrides<ShapeToGeneratorReturnValue<U>> | undefined)[]
-    : T extends readonly (infer U)[] ? readonly (OverridesHelper<U> | undefined)[]
-    : T;
+type FactoryLike<Shape> = { readonly build: (...args: never) => Shape; readonly [factorySymbol]: true; };
+
+type ShapeBuiltByFactory<T> = T extends FactoryLike<infer Shape> ? Shape : never;
+
+export type OverridesHelper<T> = [ShapeBuiltByFactory<T>] extends [never]
+    ? (T extends ArrayFactoryValue<infer U> ? readonly (Overrides<ShapeToGeneratorReturnValue<U>> | undefined)[]
+        : T extends readonly (infer U)[] ? readonly (OverridesHelper<U> | undefined)[]
+        : T)
+    : Extract<T, null | undefined> | FactoryOverride<ShapeBuiltByFactory<T>, ShapeBuiltByFactory<T>>;
 
 export type ObjectoryFactory<
     ObjectShape extends Record<string, AllowedObjectShapeValues>,
@@ -224,22 +236,6 @@ function isOverridesForFactory<F extends ObjectoryFactory<Record<string, Allowed
     override: unknown
 ): override is Parameters<F['build']>[0] {
     return override === undefined || isAllowedOverrideValue(override);
-}
-
-function joinPath(pathPrefix: string, segment: string): string {
-    return pathPrefix === '' ? segment : `${pathPrefix}.${segment}`;
-}
-
-type ValuePath = {
-    readonly withinFactory: string;
-    readonly fromRoot: string;
-};
-
-function childPath(parent: ValuePath, segment: string): ValuePath {
-    return {
-        withinFactory: joinPath(parent.withinFactory, segment),
-        fromRoot: joinPath(parent.fromRoot, segment)
-    };
 }
 
 function materializeArrayFactoryValue(
@@ -422,10 +418,7 @@ function applyOverrides<GeneratedObject extends Readonly<Record<string, unknown>
 
     for (const key of keys) {
         const value = generatedObject[key];
-        const path: ValuePath = {
-            withinFactory: String(key),
-            fromRoot: joinPath(pathPrefix, String(key))
-        };
+        const path = rootPath(pathPrefix, String(key));
         const hasOverride = Object.hasOwn(overrides, key);
         const overrideValue = hasOverride
             ? createOverrideWrapper(assertOverrideContainsNoFactories(overrides[key], path.fromRoot))

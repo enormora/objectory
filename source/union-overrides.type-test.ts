@@ -78,4 +78,20 @@ describe('overrides accepted by a nested union factory', function () {
     test('rejects a discriminator value that names no variant', function () {
         expect(blogFactory.build).type.not.toBeCallableWith({ article: { state: 'archived' } });
     });
+
+    test('rejects an override carrying only a key of another variant', function () {
+        expect(blogFactory.build).type.not.toBeCallableWith({ article: { publishedAt: 'now' } });
+    });
+
+    test('rejects a variant-exclusive key without the discriminator', function () {
+        expect(blogFactory.build).type.not.toBeCallableWith({ article: { editorNote: 'reviewed' } });
+    });
+
+    test('accepts a variant-exclusive key when the discriminator comes along', function () {
+        expect(blogFactory.build).type.toBeCallableWith({ article: { state: 'draft', editorNote: 'reviewed' } });
+    });
+
+    test('accepts a switch that names only the discriminator', function () {
+        expect(blogFactory.build).type.toBeCallableWith({ article: { state: 'published' } });
+    });
 });
