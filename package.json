@@ -16,10 +16,10 @@
     },
     "homepage": "https://github.com/enormora/objectory#readme",
     "devDependencies": {
-        "@enormora/eslint-config-base": "0.0.61",
+        "@enormora/eslint-config-base": "0.0.62",
         "@enormora/eslint-config-node": "0.0.46",
         "@enormora/eslint-config-node-assert": "0.0.7",
-        "@enormora/eslint-config-typescript": "0.0.69",
+        "@enormora/eslint-config-typescript": "0.0.70",
         "@packtory/cli": "0.0.98",
         "@packtory/github-release-gate": "0.0.61",
         "@types/node": "24.13.3",
