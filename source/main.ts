@@ -10,13 +10,18 @@ import {
 } from './override-wrapper.ts';
 
 import { createVariantSelector } from './union-variants.ts';
-import { assertAllowedObjectShapeValue, assertObjectValueComesFromFactory } from './object-shape-values.ts';
+import {
+    assertAllowedObjectShapeValue,
+    assertObjectValueComesFromFactory,
+    isPrimitiveAllowedObjectShapeValue
+} from './object-shape-values.ts';
 import { deepFreeze } from './deep-freeze.ts';
 import {
     assertOverrideMatchesArrayProperty,
     assertOverrideMatchesNestedFactory,
     childPath,
     joinPath,
+    replacesNestedFactory,
     rootPath,
     type ValuePath
 } from './override-values.ts';
@@ -324,14 +329,15 @@ function materializeTemplateArray(
 
 function withMaterializedOverride(
     override: NormalizedOverride,
+    replacesGeneratedValue: (overrideValue: unknown) => boolean,
     materialize: (overrideValue: unknown) => unknown
 ): unknown {
     if (!override.applied) {
         return materialize(undefined);
     }
 
-    if (override.value === undefined) {
-        return undefined;
+    if (replacesGeneratedValue(override.value)) {
+        return override.value;
     }
 
     return materialize(override.value);
@@ -342,7 +348,7 @@ function materializeFactoryWithOverride(
     override: NormalizedOverride,
     path: ValuePath
 ): unknown {
-    return withMaterializedOverride(override, function (resolved) {
+    return withMaterializedOverride(override, replacesNestedFactory, function (resolved) {
         if (resolved !== undefined) {
             assertOverrideMatchesNestedFactory(resolved, path.fromRoot);
         }
@@ -356,7 +362,7 @@ function materializeArrayFactoryWithOverride(
     override: NormalizedOverride,
     path: ValuePath
 ): unknown {
-    return withMaterializedOverride(override, function (resolved) {
+    return withMaterializedOverride(override, isPrimitiveAllowedObjectShapeValue, function (resolved) {
         if (resolved !== undefined) {
             assertOverrideMatchesArrayProperty(resolved, path.fromRoot);
         }
@@ -371,7 +377,7 @@ function materializeTemplateWithOverride(
     resolve: TemplateItemResolver,
     path: ValuePath
 ): unknown {
-    return withMaterializedOverride(override, function (resolved) {
+    return withMaterializedOverride(override, isPrimitiveAllowedObjectShapeValue, function (resolved) {
         if (resolved !== undefined) {
             assertOverrideMatchesArrayProperty(resolved, path.fromRoot);
         }

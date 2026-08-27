@@ -30,6 +30,10 @@ function isOverrideRecord(value: unknown): value is Record<PropertyKey, unknown>
     return prototype === Object.prototype || prototype === null;
 }
 
+export function replacesNestedFactory(value: unknown): boolean {
+    return value === null || value === undefined;
+}
+
 export function assertOverrideMatchesNestedFactory(value: unknown, path: string): void {
     if (!isOverrideRecord(value)) {
         throw new TypeError(
