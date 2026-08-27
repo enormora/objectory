@@ -79,9 +79,11 @@ const adult = personFactory.build({ age: 21 });
 Overrides are plain values, never factories: use `anotherFactory.build()` or `anotherFactory.buildList()` when the
 override values should come from another factory.
 
-An override has to be a value the property's declared type allows, and it has to match the kind of value the generator
-put there: a nested factory takes an object of overrides, an array property takes an array of them. Anything else is a
-compile error, and a type assertion that gets around it fails loudly at build time rather than being dropped.
+An override has to be a value the property's declared type allows. To merge into what the generator put there, it also has
+to match its kind: a nested factory takes an object of overrides, an array property takes an array of them. A value the
+type allows but the generator's kind does not, such as `null` for a `Person | null` property, replaces the generated value
+instead. Anything else is a compile error, and a type assertion that gets around it fails loudly at build time rather than
+being dropped.
 
 Pass `{ freeze: true }` as a second argument to deep-freeze the result, so a test that mutates a fixture fails at the
 mutation instead of leaking state into a later assertion:
@@ -266,6 +268,9 @@ What an override does depends on the kind of value the generator put in that pro
 | Plain array of factories    | merges into each element's defaults, per index | wins                  |
 | Plain array of values       | replaces per index                             | wins                  |
 
+A property whose declared type is wider than the kind the generator picked is the exception: an override that fits one of
+the other members replaces the generated value rather than merging into it. See below.
+
 Two consequences are worth knowing before you rely on them.
 
 **A merge can add keys, but it can never remove them.** Overriding a nested factory with `{}` changes nothing, and
@@ -279,10 +284,27 @@ variant it switches to rather than merging onto the previous one. See
 type spells them out, so `build({ name: undefined })` on a required `string` is a compile error rather than a way to build
 a value the type forbids. Use the `buildInvalid*` family when a test wants exactly that.
 
-Where the type does allow it, an explicit `undefined` sets the property to `undefined` and keeps the key, whatever kind of
-value the generator put there. Leaving the property out of the overrides is what asks for the default. Inside an override
-_array_, `undefined` at an index keeps that element's default instead, which is what makes
-`[ undefined, { name: 'Jane' } ]` a way to override only the second element.
+Where the type does allow it, such a value replaces what the generator put there instead of merging into it, whatever kind
+of value that was. An explicit `undefined` keeps the key:
+
+```ts
+type Tour = {
+    guide: Person | null;
+    passengers: string | readonly Person[];
+};
+
+const tourFactory = createFactory<Tour>(() => ({
+    guide: personFactory,
+    passengers: personFactory.asArray({ length: 2 })
+}));
+
+tourFactory.build({ guide: null }); // { guide: null, passengers: [ … ] }
+tourFactory.build({ passengers: 'nobody yet' }); // { guide: { … }, passengers: 'nobody yet' }
+```
+
+Leaving the property out of the overrides is what asks for the default. Inside an override _array_, `undefined` at an
+index keeps that element's default instead, which is what makes `[ undefined, { name: 'Jane' } ]` a way to override only
+the second element.
 
 An override array's length always wins, so an explicit `[]` empties the property:
 
@@ -516,8 +538,9 @@ for and the length the tuple has.
 
 **`Invalid override at "…": a nested factory takes an object of overrides, received …`**
 
-An override did not match the kind of value the generator put there. A nested factory takes an object, an array property
-takes an array. The path names the property, counting from the object you called `build` on.
+An override did not match the kind of value the generator put there, and the property's type does not allow it as a
+replacement either. A nested factory takes an object, an array property takes an array. The path names the property,
+counting from the object you called `build` on.
 
 **`Invalid override for a union factory: no registered variant matches it`**
 

@@ -29,13 +29,6 @@ const bicycleFactory = createFactory<Bicycle>(function () {
 const nestedFactoryMessage = 'a nested factory takes an object of overrides, received';
 const arrayPropertyMessage = 'an array property takes an array of overrides, received';
 
-test('build() throws when a nested factory is given null', function () {
-    assert.throws(function () {
-        // @ts-expect-error -- consumers can bypass the invalid override with a type assertion
-        return bicycleFactory.build({ frontWheel: null });
-    }, { name: 'TypeError', message: `Invalid override at "frontWheel": ${nestedFactoryMessage} null` });
-});
-
 test('build() throws when a nested factory is given a string', function () {
     assert.throws(function () {
         // @ts-expect-error -- consumers can bypass the invalid override with a type assertion
@@ -64,13 +57,6 @@ test('build() throws when a nested factory is given an instance of a class', fun
     }, { name: 'TypeError', message: `Invalid override at "frontWheel": ${nestedFactoryMessage} an object` });
 });
 
-test('build() throws when an array factory property is given null', function () {
-    assert.throws(function () {
-        // @ts-expect-error -- consumers can bypass the invalid override with a type assertion
-        return bicycleFactory.build({ spareWheels: null });
-    }, { name: 'TypeError', message: `Invalid override at "spareWheels": ${arrayPropertyMessage} null` });
-});
-
 test('build() throws when an array factory property is given a non-array object', function () {
     assert.throws(function () {
         // @ts-expect-error -- consumers can bypass the invalid override with a type assertion
@@ -78,11 +64,11 @@ test('build() throws when an array factory property is given a non-array object'
     }, { name: 'TypeError', message: `Invalid override at "spareWheels": ${arrayPropertyMessage} an object` });
 });
 
-test('build() throws when a plain array property is given null', function () {
+test('build() throws when an array factory property is given an instance of a class', function () {
     assert.throws(function () {
         // @ts-expect-error -- consumers can bypass the invalid override with a type assertion
-        return bicycleFactory.build({ colours: null });
-    }, { name: 'TypeError', message: `Invalid override at "colours": ${arrayPropertyMessage} null` });
+        return bicycleFactory.build({ spareWheels: new Map() });
+    }, { name: 'TypeError', message: `Invalid override at "spareWheels": ${arrayPropertyMessage} an object` });
 });
 
 test('build() throws when a plain array property is given a non-array object', function () {
@@ -112,6 +98,13 @@ test('build() names the path from the root when a nested override has the wrong 
         // @ts-expect-error -- consumers can bypass the invalid override with a type assertion
         return factory.build({ frame: { wheel: 'oops' } });
     }, { name: 'TypeError', message: `Invalid override at "frame.wheel": ${nestedFactoryMessage} a string` });
+});
+
+test('build() throws when an element of an array factory override is null', function () {
+    assert.throws(function () {
+        // @ts-expect-error -- consumers can bypass the invalid override with a type assertion
+        return bicycleFactory.build({ spareWheels: [ null ] });
+    }, { name: 'TypeError', message: `Invalid override at "spareWheels.0": ${nestedFactoryMessage} null` });
 });
 
 test('build() throws when an element of an array factory override has the wrong kind', function () {

@@ -13,6 +13,13 @@ type Bicycle = {
 type NullableBicycle = {
     readonly brand: string | null;
     readonly frontWheel: Wheel | null;
+    readonly spareWheels: readonly Wheel[] | null;
+    readonly colours: readonly string[] | null;
+};
+
+type MixedBicycle = {
+    readonly spareWheels: string | readonly Wheel[];
+    readonly colours: string | readonly string[];
 };
 
 type UndefinedableBicycle = {
@@ -39,7 +46,16 @@ const bicycleFactory = createFactory<Bicycle>(function () {
 });
 
 const nullableBicycleFactory = createFactory<NullableBicycle>(function () {
-    return { brand: 'Acme', frontWheel: wheelFactory };
+    return {
+        brand: 'Acme',
+        frontWheel: wheelFactory,
+        spareWheels: wheelFactory.asArray({ length: 2 }),
+        colours: [ 'red', 'blue' ]
+    };
+});
+
+const mixedBicycleFactory = createFactory<MixedBicycle>(function () {
+    return { spareWheels: wheelFactory.asArray({ length: 2 }), colours: [ 'red' ] };
 });
 
 const undefinedableBicycleFactory = createFactory<UndefinedableBicycle>(function () {
@@ -70,6 +86,8 @@ describe('null as an override value', function () {
     test('accepts null where the property type includes it', function () {
         expect(nullableBicycleFactory.build).type.toBeCallableWith({ brand: null });
         expect(nullableBicycleFactory.build).type.toBeCallableWith({ frontWheel: null });
+        expect(nullableBicycleFactory.build).type.toBeCallableWith({ spareWheels: null });
+        expect(nullableBicycleFactory.build).type.toBeCallableWith({ colours: null });
     });
 });
 
@@ -101,5 +119,19 @@ describe('undefined as an override value', function () {
 
     test('accepts undefined at an index of a plain array override to keep that default', function () {
         expect(bicycleFactory.build).type.toBeCallableWith({ colours: [ undefined, 'green' ] });
+    });
+});
+
+describe('a value from another member of the property type', function () {
+    test('accepts the other member for an array factory property', function () {
+        expect(mixedBicycleFactory.build).type.toBeCallableWith({ spareWheels: 'none' });
+    });
+
+    test('accepts the other member for a plain array property', function () {
+        expect(mixedBicycleFactory.build).type.toBeCallableWith({ colours: 'none' });
+    });
+
+    test('rejects a value no member of the property type allows', function () {
+        expect(mixedBicycleFactory.build).type.not.toBeCallableWith({ spareWheels: 3 });
     });
 });
