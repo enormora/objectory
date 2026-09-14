@@ -24,7 +24,7 @@
         "@packtory/github-release-gate": "0.0.72",
         "@types/node": "24.13.4",
         "eslint": "10.10.0",
-        "fast-check": "4.9.0",
+        "fast-check": "4.10.0",
         "rust-just": "1.57.0",
         "tstyche": "7.2.5",
         "typescript": "6.0.3"
