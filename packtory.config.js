@@ -28,11 +28,13 @@ export async function buildConfig() {
             maxBundleSize: { enabled: true, bytes: 100_000 },
             noUnusedBundleDependencies: { enabled: true },
             noDevDependencyImports: { enabled: true },
-            uniqueTargetPaths: { enabled: true }
+            uniqueTargetPaths: { enabled: true },
+            noUnexposedExecutables: { enabled: true }
         },
         commonPackageSettings: {
             sourcesFolder,
             mainPackageJson: packageJson,
+            deadCodeElimination: { enabled: true },
             includeSourceMapFiles: true,
             publishSettings: {
                 access: 'public',
