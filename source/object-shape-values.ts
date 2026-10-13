@@ -3,11 +3,7 @@ import { isRecord } from './record.ts';
 const primitiveAllowedTypes = new Set([ 'string', 'number', 'boolean', 'bigint', 'symbol', 'function' ]);
 
 export function isPrimitiveAllowedObjectShapeValue(value: unknown): boolean {
-    if (value === null || value === undefined) {
-        return true;
-    }
-
-    if (value instanceof Date) {
+    if (value === null || value === undefined || value instanceof Date) {
         return true;
     }
 
