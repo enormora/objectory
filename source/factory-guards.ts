@@ -7,11 +7,7 @@ export function isFactory(value: unknown): boolean {
 }
 
 export function isArrayFactoryValue(value: unknown): boolean {
-    if (!isRecord(value)) {
-        return false;
-    }
-
-    if (value[arrayFactorySymbol] !== true) {
+    if (!isRecord(value) || value[arrayFactorySymbol] !== true) {
         return false;
     }
 
