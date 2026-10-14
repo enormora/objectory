@@ -4,7 +4,7 @@
     "main": "index.js",
     "type": "module",
     "engines": {
-        "node": ">=22.18.0"
+        "node": ">=24"
     },
     "repository": {
         "type": "git",
