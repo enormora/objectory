@@ -4,6 +4,8 @@ Objectory is a library for building nested object factories with strong typing. 
 
 ## Installation
 
+Requires Node.js 24 or later.
+
 ```bash
 npm install -D @enormora/objectory
 ```
