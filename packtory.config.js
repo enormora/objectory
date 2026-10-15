@@ -8,45 +8,47 @@ const licensePath = path.join(projectFolder, 'LICENSE');
 const readmePath = path.join(projectFolder, 'README.md');
 
 /**
- * @returns {Promise<import('@packtory/cli').PacktoryConfig>}
+ * @returns {Promise<import('@packtory/cli').PacktoryConfiguration>}
  */
-export async function buildConfig() {
+export async function buildConfiguration() {
     const packageJsonContent = await fs.readFile('./package.json', { encoding: 'utf8' });
     const packageJson = JSON.parse(packageJsonContent);
 
     return {
         registrySettings: {
-            auth: {
-                publish: { type: 'npm-oidc', provider: 'auto' },
-                metadata: 'auto'
+            authentication: {
+                publish: { type: 'npm-open-identity-connect', provider: 'automatic' },
+                metadata: 'automatic'
             }
         },
         checks: {
-            typeScriptIntegrity: { enabled: true },
+            typeScriptIntegrity: { enabled: true, declarations: 'all' },
             noDuplicatedFiles: { enabled: true },
             requiredFiles: { enabled: true, files: [ 'LICENSE', 'README.md' ] },
-            maxBundleSize: { enabled: true, bytes: 100_000 },
+            maximumBundleSize: { enabled: true, bytes: 100_000 },
             noUnusedBundleDependencies: { enabled: true },
-            noDevDependencyImports: { enabled: true },
+            noDevelopmentDependencyImports: { enabled: true },
             uniqueTargetPaths: { enabled: true },
-            noUnexposedExecutables: { enabled: true }
+            noUnexposedExecutables: { enabled: true },
+            nodeEngineCompatibility: { enabled: true },
+            noSideEffects: { enabled: true }
         },
         commonPackageSettings: {
             sourcesFolder,
-            mainPackageJson: packageJson,
-            deadCodeElimination: { enabled: true },
+            mainPackageManifest: packageJson,
+            deadCodeElimination: { enabled: true, pureConstructors: [ 'Set' ] },
             includeSourceMapFiles: true,
             publishSettings: {
                 access: 'public',
-                provenance: { type: 'auto' }
+                provenance: { type: 'automatic' }
             },
             additionalFiles: [
                 {
-                    sourceFilePath: licensePath,
+                    inputFilePath: licensePath,
                     targetFilePath: 'LICENSE'
                 }
             ],
-            additionalPackageJsonAttributes: {
+            additionalPackageManifestAttributes: {
                 repository: packageJson.repository,
                 license: packageJson.license,
                 engines: packageJson.engines
@@ -55,20 +57,20 @@ export async function buildConfig() {
         packages: [
             {
                 name: '@enormora/objectory',
-                exportPackageJson: true,
+                exportPackageManifest: true,
                 roots: {
                     main: {
-                        js: 'main.js',
+                        javaScript: 'main.js',
                         declarationFile: 'main.d.ts'
                     }
                 },
-                additionalPackageJsonAttributes: {
+                additionalPackageManifestAttributes: {
                     description: 'A library for defining JavaScript objects for testing',
                     keywords: [ 'factory', 'factories', 'test', 'testing', 'test data' ]
                 },
                 additionalFiles: [
                     {
-                        sourceFilePath: readmePath,
+                        inputFilePath: readmePath,
                         targetFilePath: 'README.md'
                     }
                 ]

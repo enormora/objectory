@@ -39,8 +39,8 @@ jobs:
               run: npm clean-install
             - name: Run all tests
               run: npx just test
-            - name: Packtory dry-run
-              run: npx just packtory-dry-run
+            - name: Check packages
+              run: npx just check-packages
 
     workflow-security:
         runs-on: ubuntu-24.04

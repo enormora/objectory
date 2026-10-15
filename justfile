@@ -31,3 +31,7 @@ packtory-publish: compile
 
 release-gate: compile
 	github-release-gate
+
+check-packages: compile
+    rm -rf target/package-checks
+    packtory pack --all --format folder --out target/package-checks
