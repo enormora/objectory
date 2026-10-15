@@ -39,7 +39,7 @@ jobs:
               run: npm clean-install
             - name: Run all tests
               run: npx just test
-            - name: Packtory dry-run
+            - name: Publish dry run
               run: npx just packtory-dry-run
 
     workflow-security:
