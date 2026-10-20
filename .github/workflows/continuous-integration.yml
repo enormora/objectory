@@ -20,7 +20,7 @@ defaults:
 
 jobs:
     verify:
-        runs-on: ubuntu-24.04
+        runs-on: ubuntu-26.04
         permissions:
             contents: read # required for actions/checkout to read the workflow source
         strategy:
@@ -43,7 +43,7 @@ jobs:
               run: npx just packtory-dry-run
 
     workflow-security:
-        runs-on: ubuntu-24.04
+        runs-on: ubuntu-26.04
         name: Workflow security analysis
         permissions:
             contents: read # required for actions/checkout to read the workflow source
