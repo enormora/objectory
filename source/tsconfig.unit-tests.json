@@ -2,9 +2,16 @@
     "extends": "../tsconfig.base.json",
     "compilerOptions": {
         "tsBuildInfoFile": "../target/buildcache/unit-tests.tsbuildinfo",
-        "rootDir": "..",
-        "types": ["node"]
+        "rootDir": ".."
     },
-    "references": [{ "path": "./tsconfig.sources.json" }],
-    "include": ["./**/*.test.ts", "./**/*.property.ts", "./**/*.test-support.ts"]
+    "references": [
+        {
+            "path": "./tsconfig.sources.json"
+        }
+    ],
+    "include": [
+        "./**/*.test.ts",
+        "./**/*.property.ts",
+        "./**/*.test-support.ts"
+    ]
 }
