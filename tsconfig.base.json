@@ -2,7 +2,6 @@
     "extends": "@enormora/tsconfig-node/tsconfig.json",
     "compilerOptions": {
         "target": "ES2024",
-        "importHelpers": true,
         "outDir": "./target/build",
         "lib": [
             "ES2024"

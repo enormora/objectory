@@ -11,7 +11,7 @@ export function isArrayFactoryValue(value: unknown): boolean {
         return false;
     }
 
-    return isFactory(value['factory']) && typeof value['length'] === 'number';
+    return isFactory(value.factory) && typeof value.length === 'number';
 }
 
 function assertOverrideValueIsNotAFactory(value: unknown, path: string): void {
